@@ -112,6 +112,7 @@ python3 -m venv .venv
 - `GET /api/trips/{case_id}` — получение checkpoint state.
 - `POST /api/trips/{case_id}/answers` — resume после clarification interrupt.
 - `POST /api/trips/{case_id}/selection` — запуск booking graph.
+- `POST /api/trips/{case_id}/replan` — запуск replanning graph.
 - `POST /api/trips/{case_id}/cancel` — запуск cancellation graph.
 - `GET/POST /api/policies` — публикация и просмотр policy documents для RAG.
 - `GET /api/health` — health check.

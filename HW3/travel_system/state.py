@@ -77,6 +77,9 @@ class TripState(TypedDict, total=False):
     policy_context: list[PolicyChunk]
     policy_decisions: list[PolicyDecision]
     approvals: list[dict[str, Any]]
+    approval_decision: str | None
+    search_task: SearchTask
+    replan_reason: str | None
     plan: dict[str, Any]
     search_tasks: list[SearchTask]
     search_results: Annotated[list[Offer], operator.add]

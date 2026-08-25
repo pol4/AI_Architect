@@ -147,7 +147,9 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) == 4 and parts[0:2] == ["api", "trips"]:
                 case_id, action = parts[2], parts[3]
                 if action == "answers":
-                    result = run_trip(case_id, resume=payload.get("answers", {}))
+                    result = run_trip(case_id, resume=payload.get("answers", payload))
+                elif action == "replan":
+                    result = workflow().replanning_graph.invoke({**current_state(case_id), "replan_reason": payload.get("reason", "unavailable")}, config(case_id))
                 elif action == "selection":
                     result = workflow().booking_graph.invoke({**current_state(case_id), "selected_alternative_id": payload.get("alternative_id")}, config(case_id))
                 elif action == "cancel":

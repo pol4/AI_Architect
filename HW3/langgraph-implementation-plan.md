@@ -36,8 +36,10 @@ business-travel/
 | Human-in-the-loop clarification | `travel_system/graphs.py:TravelGraphs._ask_clarification` | Реализовано через `interrupt` |
 | Fan-out/fan-in поиска | `travel_system/graphs.py:TravelGraphs._dispatch_search`, `_search_worker` | Реализовано через `Send`, barrier требует усиления |
 | Специализированные search agents | `travel_system/agents.py` | Реализовано на mock adapters |
-| Booking graph | `travel_system/graphs.py:TravelGraphs._build_booking_graph` | Реализован demo-flow |
-| Cancellation graph | `travel_system/graphs.py:TravelGraphs._build_cancellation_graph` | Реализован demo-flow |
+| Booking graph | `travel_system/graphs.py:TravelGraphs._build_booking_graph` | Реализован demo-flow с interrupt/resume |
+| Cancellation graph | `travel_system/graphs.py:TravelGraphs._build_cancellation_graph` | Реализован demo-flow с quote и confirmation |
+| Approval interrupt | `travel_system/graphs.py:TravelGraphs._approval_interrupt` | Реализован для conditional policy decision |
+| Replanning graph | `travel_system/graphs.py:TravelGraphs._build_replanning_graph` | Реализована маршрутизация причины сбоя |
 | RAG ingestion/runtime | `travel_system/rag.py:PolicyRAG` | Реализован SQLite lexical prototype |
 | OpenAI-compatible gateway | `travel_system/llm.py:LLMGateway` | Реализован для parser; остальные роли подготовлены |
 | PostgreSQL checkpointer | Не реализован | Production backlog |

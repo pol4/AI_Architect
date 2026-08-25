@@ -7,7 +7,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send, interrupt
 
-from .agents import BookingAgent, CancellationRefundAgent, build_tasks, search_task
+from .agents import BookingAgent, CancellationRefundAgent, ReplanningAgent, build_tasks, search_task
 from .llm import LLMGateway
 from .rag import PolicyRAG
 from .state import TripState
@@ -19,10 +19,12 @@ class TravelGraphs:
         self.llm = LLMGateway(rag.db_path)
         self.booking_agent = BookingAgent()
         self.cancellation_agent = CancellationRefundAgent()
+        self.replanning_agent = ReplanningAgent()
         self.checkpointer = MemorySaver()
         self.trip_graph = self._build_trip_graph()
         self.booking_graph = self._build_booking_graph()
         self.cancellation_graph = self._build_cancellation_graph()
+        self.replanning_graph = self._build_replanning_graph()
 
     def _audit(self, event: str) -> list[dict[str, str]]:
         return [{"event": event, "at": "system"}]
@@ -54,6 +56,11 @@ class TravelGraphs:
         decisions = self.rag.evaluate(state.get("trip", {}), state.get("policy_context", []))
         status = "approval_pending" if any(item["decision"] == "conditional" for item in decisions) else "planning"
         return {"policy_decisions": decisions, "status": status, "next_action": "approval" if status == "approval_pending" else "plan", "audit": self._audit("POLICY_EVALUATED")}
+
+    def _approval_interrupt(self, state: TripState) -> dict[str, Any]:
+        decision = interrupt({"type": "approval", "decisions": state.get("policy_decisions", [])})
+        approved = decision.get("decision") == "approved" if isinstance(decision, dict) else False
+        return {"approval_decision": "approved" if approved else "rejected", "status": "planning" if approved else "failed", "next_action": "plan" if approved else "manual_review", "audit": self._audit("APPROVAL_RECEIVED")}
 
     def _create_plan(self, state: TripState) -> dict[str, Any]:
         tasks = build_tasks(state.get("trip", {}))
@@ -91,7 +98,9 @@ class TravelGraphs:
         graph.add_edge("retrieve_policy_context", "check_completeness")
         graph.add_conditional_edges("check_completeness", lambda state: "ask_clarification" if state.get("missing_fields") else "evaluate_policy")
         graph.add_edge("ask_clarification", "retrieve_policy_context")
-        graph.add_edge("evaluate_policy", "create_plan")
+        graph.add_conditional_edges("evaluate_policy", lambda state: "approval_interrupt" if state.get("status") == "approval_pending" else "create_plan")
+        graph.add_node("approval_interrupt", self._approval_interrupt)
+        graph.add_conditional_edges("approval_interrupt", lambda state: "create_plan" if state.get("approval_decision") == "approved" else END)
         graph.add_conditional_edges("create_plan", self._dispatch_search, ["search_worker"])
         graph.add_edge("search_worker", "collect_results")
         graph.add_edge("collect_results", "build_alternatives")
@@ -128,6 +137,18 @@ class TravelGraphs:
         if not confirmation.get("confirm"):
             return {"status": "confirmed", "next_action": "cancel_or_complete"}
         return {"status": "cancelled", "next_action": "none", "audit": self._audit("TRIP_CANCELLED")}
+
+    def _replan(self, state: TripState) -> dict[str, Any]:
+        reason = state.get("replan_reason", "unavailable")
+        route = self.replanning_agent.classify(reason)
+        return {"status": "searching" if route == "search" else "manual_review", "next_action": route, "audit": self._audit("REPLAN_ROUTED")}
+
+    def _build_replanning_graph(self):
+        graph = StateGraph(TripState)
+        graph.add_node("replanning_agent", self._replan)
+        graph.add_edge(START, "replanning_agent")
+        graph.add_edge("replanning_agent", END)
+        return graph.compile(checkpointer=self.checkpointer)
 
     def _build_cancellation_graph(self):
         graph = StateGraph(TripState)
