@@ -1,0 +1,620 @@
+openapi: 3.0.3
+info:
+  title: Business Travel Automation API
+  version: 1.0.0
+  description: |
+    API портала, специализированных агентов и детерминированных
+    операционных сервисов автоматического оформления командировок.
+    Search-агенты возвращают offers, а Booking/Cancellation сервисы
+    выполняют hold, book, cancel и refund идемпотентно.
+servers:
+  - url: https://travel.company.example/api/v1
+    description: Internal production
+security:
+  - bearerAuth: []
+tags:
+  - name: Trip Cases
+  - name: Approvals
+  - name: Booking
+  - name: Policies
+  - name: Cancellation
+paths:
+  /trip-cases:
+    post:
+      tags: [Trip Cases]
+      summary: Создать кейс командировки из свободного текста
+      operationId: createTripCase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTripCaseRequest'
+            example:
+              request_text: "Нужна поездка из Москвы в Берлин на 3 дня в конце сентября для встречи с клиентом, бюджет 180000 рублей"
+              locale: "ru-RU"
+      responses:
+        '201':
+          description: Кейс создан; дальнейшие действия определяются workflow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripCase'
+              example:
+                case_id: "case_01JTRIP8Q"
+                status: "clarification_required"
+                next_action: "answer_questions"
+                questions:
+                  - id: "q1"
+                    field: "departure_date"
+                    text: "Укажите дату выезда и допустимый диапазон дат"
+                    required: true
+                created_at: "2026-08-25T16:00:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /trip-cases/{case_id}:
+    get:
+      tags: [Trip Cases]
+      summary: Получить текущее состояние командировки
+      operationId: getTripCase
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: Текущее состояние кейса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripCase'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /trip-cases/{case_id}/answers:
+    post:
+      tags: [Trip Cases]
+      summary: Ответить на уточняющие вопросы
+      operationId: answerQuestions
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerQuestionsRequest'
+            example:
+              answers:
+                departure_date: "2026-09-28"
+                return_date: "2026-10-01"
+                departure_city: "Москва"
+      responses:
+        '202':
+          description: Ответ принят; workflow продолжен асинхронно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowAccepted'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /trip-cases/{case_id}/plan:
+    get:
+      tags: [Trip Cases]
+      summary: Получить план оформления и альтернативы
+      operationId: getTripPlan
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: План с процедурами, согласованиями и вариантами
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TravelPlan'
+  /trip-cases/{case_id}/approvals/{approval_id}:
+    post:
+      tags: [Approvals]
+      summary: Принять решение по согласованию
+      operationId: decideApproval
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - name: approval_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecisionRequest'
+            example:
+              decision: "approved"
+              comment: "Согласовано в рамках бюджета проекта"
+      responses:
+        '202':
+          description: Решение принято
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowAccepted'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /trip-cases/{case_id}/selection:
+    post:
+      tags: [Booking]
+      summary: Выбрать и подтвердить альтернативу
+      description: Booking Agent повторно проверяет offers, затем передаёт команду детерминированному Booking Service.
+      operationId: selectAlternative
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelectionRequest'
+            example:
+              alternative_id: "alt_03"
+              confirm_purchase: true
+              idempotency_key: "select_case_01JTRIP8Q_alt_03_v1"
+      responses:
+        '202':
+          description: Запущена повторная проверка и финальное бронирование
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowAccepted'
+        '409':
+          description: Альтернатива устарела, требуется перепланирование
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /trip-cases/{case_id}/replan:
+    post:
+      tags: [Booking]
+      summary: Запустить перепланирование
+      operationId: replanTrip
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplanRequest'
+      responses:
+        '202':
+          description: Поиск новых вариантов запущен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowAccepted'
+  /trip-cases/{case_id}/cancellation-quote:
+    post:
+      tags: [Cancellation]
+      summary: Рассчитать условия отмены
+      operationId: calculateCancellationQuote
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: Штрафы и ожидаемая сумма возврата
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationQuote'
+  /trip-cases/{case_id}/cancel:
+    post:
+      tags: [Cancellation]
+      summary: Подтвердить отмену командировки
+      description: Cancellation & Refund Agent передаёт подтверждённую операцию детерминированному Cancellation Manager.
+      operationId: cancelTrip
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
+            example:
+              quote_id: "quote_01JTRIP8Q"
+              confirm: true
+              idempotency_key: "cancel_case_01JTRIP8Q_v1"
+      responses:
+        '202':
+          description: Отмена броней и возврат запущены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowAccepted'
+  /policies:
+    post:
+      tags: [Policies]
+      summary: Опубликовать версию нормативного документа
+      operationId: publishPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyDocument'
+      responses:
+        '201':
+          description: Документ сохранён и поставлен на индексацию
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyDocument'
+  /policies/{policy_id}/index:
+    post:
+      tags: [Policies]
+      summary: Запустить ingestion и индексацию версии политики
+      operationId: indexPolicy
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyIndexRequest'
+            example:
+              version: "2026.09"
+              source_uri: "s3://corporate-policies/business-travel/2026.09.pdf"
+      responses:
+        '202':
+          description: Документ поставлен в ingestion pipeline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyIndexJob'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /policies/{policy_id}/index-status:
+    get:
+      tags: [Policies]
+      summary: Получить статус ingestion и публикации политики
+      operationId: getPolicyIndexStatus
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Статус обработки и quality gates RAG
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyIndexJob'
+  /policy-context:
+    post:
+      tags: [Policies]
+      summary: Получить применимый RAG-контекст для TripRequest
+      description: Внутренний endpoint. Возвращает только опубликованные фрагменты с provenance; не принимает нормативное решение сам.
+      operationId: retrievePolicyContext
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyContextRequest'
+            example:
+              destination: "Берлин"
+              departure_date: "2026-09-28"
+              return_date: "2026-10-01"
+              department: "sales"
+              purpose: "Встреча с клиентом"
+      responses:
+        '200':
+          description: RAG-фрагменты после hybrid retrieval и reranking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyContextResponse'
+        '422':
+          $ref: '#/components/responses/BadRequest'
+  /health:
+    get:
+      security: []
+      tags: [Trip Cases]
+      summary: Проверка доступности сервиса
+      operationId: health
+      responses:
+        '200':
+          description: Сервис доступен
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok, degraded] }
+                  version: { type: string }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    CaseId:
+      name: case_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^case_[A-Za-z0-9]+$'
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Требуется аутентификация
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Кейс не найден
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Недопустимое состояние или устаревшая версия
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    CreateTripCaseRequest:
+      type: object
+      required: [request_text]
+      properties:
+        request_text: { type: string, minLength: 10, maxLength: 10000 }
+        locale: { type: string, default: ru-RU }
+    AnswerQuestionsRequest:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: object
+          additionalProperties: { type: string }
+    ApprovalDecisionRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approved, rejected, changes_requested] }
+        comment: { type: string, maxLength: 2000 }
+    SelectionRequest:
+      type: object
+      required: [alternative_id, confirm_purchase, idempotency_key]
+      properties:
+        alternative_id: { type: string }
+        confirm_purchase: { type: boolean, enum: [true] }
+        idempotency_key: { type: string, minLength: 8, maxLength: 128 }
+    ReplanRequest:
+      type: object
+      properties:
+        reason: { type: string, enum: [expired_hold, price_changed, unavailable, partial_booking, user_requested] }
+        constraints: { type: object, additionalProperties: { type: string } }
+    CancelRequest:
+      type: object
+      required: [quote_id, confirm, idempotency_key]
+      properties:
+        quote_id: { type: string }
+        confirm: { type: boolean, enum: [true] }
+        idempotency_key: { type: string, minLength: 8, maxLength: 128 }
+    TripCase:
+      type: object
+      required: [case_id, status, next_action, created_at]
+      properties:
+        case_id: { type: string }
+        status:
+          type: string
+          enum: [draft, parsing, clarification_required, policy_check, approval_pending, planning, searching, alternatives_ready, awaiting_selection, booking, partial_booking, confirmed, cancellation_requested, cancelled, completed, replanning, failed]
+        next_action: { type: string }
+        trip: { $ref: '#/components/schemas/TripRequest' }
+        questions:
+          type: array
+          items: { $ref: '#/components/schemas/Question' }
+        alternatives:
+          type: array
+          items: { $ref: '#/components/schemas/Alternative' }
+        bookings:
+          type: array
+          items: { $ref: '#/components/schemas/Booking' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TripRequest:
+      type: object
+      properties:
+        departure_city: { type: string }
+        destination: { type: string }
+        departure_date: { type: string, format: date }
+        return_date: { type: string, format: date }
+        purpose: { type: string }
+        budget: { type: number, minimum: 0 }
+        currency: { type: string, example: RUB }
+        preferences: { type: object, additionalProperties: { type: string } }
+    Question:
+      type: object
+      required: [id, field, text, required]
+      properties:
+        id: { type: string }
+        field: { type: string }
+        text: { type: string }
+        required: { type: boolean }
+    TravelPlan:
+      type: object
+      required: [case_id, tasks, policy_decisions]
+      properties:
+        case_id: { type: string }
+        tasks:
+          type: array
+          items: { $ref: '#/components/schemas/SearchTask' }
+        approvals:
+          type: array
+          items: { $ref: '#/components/schemas/Approval' }
+        policy_decisions:
+          type: array
+          items: { $ref: '#/components/schemas/PolicyDecision' }
+        alternatives:
+          type: array
+          items: { $ref: '#/components/schemas/Alternative' }
+    SearchTask:
+      type: object
+      required: [task_id, type, status]
+      properties:
+        task_id: { type: string }
+        type: { type: string, enum: [transport, hotel, transfer, visa, insurance] }
+        status: { type: string, enum: [pending, running, completed, failed, skipped] }
+    Alternative:
+      type: object
+      required: [alternative_id, total_price, currency, valid_until, items]
+      properties:
+        alternative_id: { type: string }
+        total_price: { type: number, minimum: 0 }
+        currency: { type: string, example: RUB }
+        valid_until: { type: string, format: date-time }
+        policy_compliant: { type: boolean }
+        policy_refs: { type: array, items: { type: string } }
+        items: { type: array, items: { $ref: '#/components/schemas/Offer' } }
+    Offer:
+      type: object
+      required: [offer_id, type, provider, price, currency]
+      properties:
+        offer_id: { type: string }
+        type: { type: string, enum: [flight, train, hotel, transfer, visa, insurance] }
+        provider: { type: string }
+        price: { type: number, minimum: 0 }
+        currency: { type: string }
+        cancellation_policy: { type: string }
+        hold_until: { type: string, format: date-time }
+    Approval:
+      type: object
+      required: [approval_id, type, status]
+      properties:
+        approval_id: { type: string }
+        type: { type: string, enum: [manager, finance, travel_manager] }
+        status: { type: string, enum: [pending, approved, rejected, changes_requested] }
+        decided_by: { type: string }
+    PolicyDecision:
+      type: object
+      required: [decision, policy_id, policy_version]
+      properties:
+        decision: { type: string, enum: [allowed, denied, conditional] }
+        policy_id: { type: string }
+        policy_version: { type: string }
+        rule_code: { type: string }
+        explanation: { type: string }
+        citation: { type: string }
+    Booking:
+      type: object
+      required: [booking_id, type, status]
+      properties:
+        booking_id: { type: string }
+        type: { type: string, enum: [flight, train, hotel, transfer, visa, insurance] }
+        status: { type: string, enum: [hold, booked, cancelled, refund_pending, refunded, unknown] }
+        provider_reference: { type: string }
+        price: { type: number }
+        currency: { type: string }
+    CancellationQuote:
+      type: object
+      required: [quote_id, total_penalty, expected_refund, currency, valid_until]
+      properties:
+        quote_id: { type: string }
+        total_penalty: { type: number, minimum: 0 }
+        expected_refund: { type: number, minimum: 0 }
+        currency: { type: string }
+        valid_until: { type: string, format: date-time }
+        details: { type: array, items: { type: string } }
+    PolicyIndexRequest:
+      type: object
+      required: [version, source_uri]
+      properties:
+        version: { type: string }
+        source_uri: { type: string, format: uri }
+        force_reindex: { type: boolean, default: false }
+    PolicyIndexJob:
+      type: object
+      required: [job_id, policy_id, version, status]
+      properties:
+        job_id: { type: string }
+        policy_id: { type: string }
+        version: { type: string }
+        status: { type: string, enum: [queued, extracting, chunking, embedding, indexing, validating, published, rejected] }
+        chunks_count: { type: integer, minimum: 0 }
+        quality_gates:
+          type: object
+          properties:
+            provenance_complete: { type: boolean }
+            effective_dates_valid: { type: boolean }
+            regression_passed: { type: boolean }
+        error: { type: string, nullable: true }
+    PolicyContextRequest:
+      type: object
+      required: [destination, departure_date, return_date, department]
+      properties:
+        destination: { type: string }
+        departure_date: { type: string, format: date }
+        return_date: { type: string, format: date }
+        department: { type: string }
+        purpose: { type: string }
+        service_types:
+          type: array
+          items: { type: string, enum: [transport, hotel, transfer, visa, insurance] }
+    PolicyContextResponse:
+      type: object
+      required: [chunks, retrieval_id]
+      properties:
+        retrieval_id: { type: string }
+        chunks:
+          type: array
+          items:
+            type: object
+            required: [chunk_id, policy_id, version, text, citation, content_hash]
+            properties:
+              chunk_id: { type: string }
+              policy_id: { type: string }
+              version: { type: string }
+              text: { type: string }
+              citation: { type: string }
+              content_hash: { type: string }
+              score: { type: number, minimum: 0 }
+    PolicyDocument:
+      type: object
+      required: [policy_id, version, title, effective_from, content]
+      properties:
+        policy_id: { type: string }
+        version: { type: string }
+        title: { type: string }
+        effective_from: { type: string, format: date }
+        effective_to: { type: string, format: date, nullable: true }
+        scope: { type: object, additionalProperties: { type: string } }
+        content: { type: string }
+    WorkflowAccepted:
+      type: object
+      required: [case_id, status, correlation_id]
+      properties:
+        case_id: { type: string }
+        status: { type: string, enum: [accepted, running, replanning] }
+        correlation_id: { type: string }
+    ErrorResponse:
+      type: object
+      required: [code, message, correlation_id]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        correlation_id: { type: string }
+        details: { type: object, additionalProperties: true }

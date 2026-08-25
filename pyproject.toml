@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "business-travel-automation"
+version = "0.1.0"
+description = "LangGraph-based business travel automation prototype"
+requires-python = ">=3.11"
+dependencies = [
+  "langgraph>=0.2,<1.0",
+  "langchain-core>=0.3,<1.0",
+  "langchain-openai>=0.2,<1.0",
+  "pydantic>=2.7,<3.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "test_app.py"]

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Командировки AI</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,sans-serif;color:#172033;background:#f4f7fb}*{box-sizing:border-box}body{margin:0}.shell{max-width:1120px;margin:auto;padding:28px 18px 48px}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}h1{margin:0;font-size:28px}h2{font-size:20px;margin:0 0 14px}.subtitle{color:#667085;margin-top:6px}.tabs{display:flex;gap:8px}.tab,button{border:0;border-radius:10px;padding:11px 16px;font:inherit;cursor:pointer}.tab{background:#e6ebf4;color:#344054}.tab.active,button.primary{background:#2855c5;color:white}button.secondary{background:#e8eefc;color:#1f45a4}button.danger{background:#fee4e2;color:#b42318}.panel{background:white;border:1px solid #e3e8f0;border-radius:16px;padding:22px;box-shadow:0 5px 20px #182b4a0a;margin-bottom:18px}.hidden{display:none}.label{display:block;font-size:13px;font-weight:700;margin:15px 0 6px;color:#344054}textarea,input,select{width:100%;border:1px solid #ccd5e3;border-radius:9px;padding:11px;font:inherit;background:#fff}textarea{min-height:150px;resize:vertical}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.config-card{border:1px solid #e2e8f0;border-radius:12px;padding:15px}.config-card h3{margin:0 0 8px;font-size:16px;text-transform:capitalize}.actions{display:flex;gap:10px;align-items:center;margin-top:18px;flex-wrap:wrap}.status{padding:9px 12px;border-radius:9px;background:#eef4ff;color:#2447a6;margin-top:14px}.error{background:#fff0ee;color:#b42318}.question{padding:12px;background:#f8fafc;border-radius:10px;margin:9px 0}.question input{margin-top:7px}.offer{border:1px solid #dce4f0;border-radius:12px;padding:15px;margin:10px 0}.offer.selected{border:2px solid #2855c5;background:#f6f8ff}.offer-head{display:flex;justify-content:space-between;gap:12px}.price{font-weight:800;color:#1f45a4;white-space:nowrap}.muted{color:#667085;font-size:14px}.badge{display:inline-block;background:#e7f6ec;color:#147b3d;border-radius:20px;padding:4px 9px;font-size:12px}.facts{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.fact{background:#f2f4f7;border-radius:8px;padding:7px 9px;font-size:13px}.audit{font-size:13px;color:#667085;padding-left:18px}@media(max-width:720px){header{display:block}.tabs{margin-top:16px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header><div><h1>Командировки AI</h1><div class="subtitle">Оформление поездки на основе корпоративных правил</div></div><nav class="tabs"><button class="tab active" data-tab="trip">Новая поездка</button><button class="tab" data-tab="settings">Настройки LLM</button></nav></header>
+<section id="trip" class="view"><div class="panel"><h2>Опишите задачу</h2><p class="muted">Напишите в свободной форме направление, даты, цель, бюджет и предпочтения. Система задаст вопросы по действующим правилам компании.</p><textarea id="request" placeholder="Например: Нужно съездить из Москвы в Санкт-Петербург с 15 по 17 сентября для встречи с клиентом, бюджет 60000 рублей. Нужны билет и отель."></textarea><div class="actions"><button class="primary" id="create">Начать оформление</button><span class="muted" id="configHint"></span></div><div id="tripStatus"></div></div><div id="case" class="panel hidden"></div></section>
+<section id="settings" class="view hidden"><div class="panel"><h2>Подключение LLM</h2><p class="muted">Настройки сохраняются в локальной SQLite-базе. Ключи не возвращаются в браузер после сохранения; пустой ключ оставляет ранее сохранённый.</p><div id="configs" class="grid"></div><div class="actions"><button class="primary" id="saveConfig">Сохранить настройки</button><span id="saveStatus" class="muted"></span></div></div></section>
+</div>
+<script>
+const roles=['parser','supervisor','worker','summary'];let currentCase=null,configs={};
+const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(path,options={}){const res=await fetch(path,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});const data=await res.json();if(!res.ok)throw new Error(data.error||data.message||'Ошибка запроса');return data}
+function status(text,error=false){$('tripStatus').innerHTML=`<div class="status ${error?'error':''}">${esc(text)}</div>`}
+function renderCase(c){currentCase=c;let html=`<h2>Кейс ${esc(c.case_id)}</h2><div class="facts"><span class="fact">Статус: <b>${esc(c.status)}</b></span><span class="fact">Следующее действие: <b>${esc(c.next_action)}</b></span></div>`;if(c.policy_context?.length)html+=`<p class="muted"><b>Применённые правила RAG:</b> ${c.policy_context.map(p=>`${esc(p.id)} v${esc(p.version)} — ${esc(p.title)}`).join('; ')}</p>`;if(c.questions?.length){html+='<h3>Нужно уточнить</h3><div id="questions">'+c.questions.map(q=>`<div class="question"><b>${esc(q.text)}</b><input data-field="${esc(q.field)}" placeholder="Ваш ответ"></div>`).join('')+'</div><button class="primary" id="answers">Продолжить</button>'}else if(c.alternatives?.length&&!c.selected_alternative_id){html+='<h3>Выберите вариант</h3>'+c.alternatives.map(a=>`<div class="offer" data-offer="${esc(a.alternative_id)}"><div class="offer-head"><b>${esc(a.title)}</b><span class="price">${a.total_price.toLocaleString('ru-RU')} ${esc(a.currency)}</span></div><p class="muted">${a.items.map(i=>`${esc(i.type)}: ${esc(i.title)} — ${i.price.toLocaleString('ru-RU')} ₽`).join('<br>')}</p><span class="badge">${a.within_budget?'В пределах бюджета':'Выше указанного бюджета'}</span></div>`).join('')+'<div class="actions"><button class="primary" id="book" disabled>Подтвердить выбранный вариант</button></div>'}else if(c.status==='confirmed'){html+=`<h3>Командировка оформлена</h3><p>Брони созданы для выбранного варианта. При необходимости поездку можно отменить.</p><button class="danger" id="cancel">Отменить поездку</button>`}else if(c.status==='cancelled'){html+='<div class="status">Командировка отменена, операции возврата запущены.</div>'}if(c.audit?.length)html+='<h3>История</h3><ul class="audit">'+c.audit.map(e=>`<li>${esc(e.event)} — ${new Date(e.at).toLocaleString('ru-RU')}</li>`).join('')+'</ul>';$('case').innerHTML=html;$('case').classList.remove('hidden');bindCase()}
+function bindCase(){
+  const answerBtn=$('answers');
+  if(answerBtn)answerBtn.onclick=async()=>{
+    const answers={};
+    document.querySelectorAll('[data-field]').forEach(i=>answers[i.dataset.field]=i.value);
+    try{renderCase(await api(`/api/trips/${currentCase.case_id}/answers`,{method:'POST',body:JSON.stringify({answers})}))}catch(e){status(e.message,true)}
+  };
+  document.querySelectorAll('[data-offer]').forEach(el=>el.onclick=()=>{
+    document.querySelectorAll('.offer').forEach(x=>x.classList.remove('selected'));
+    el.classList.add('selected');$('book').disabled=false;$('book').dataset.id=el.dataset.offer;
+  });
+  const book=$('book');
+  if(book)book.onclick=async()=>{
+    try{
+      renderCase(await api(`/api/trips/${currentCase.case_id}/selection`,{method:'POST',body:JSON.stringify({alternative_id:book.dataset.id,confirm_purchase:true,idempotency_key:`web-${currentCase.case_id}-${book.dataset.id}`})}));
+    }catch(e){status(e.message,true)}
+  };
+  const cancel=$('cancel');
+  if(cancel)cancel.onclick=async()=>{
+    if(!confirm('Рассчитать отмену и подтвердить отмену поездки?'))return;
+    try{
+      renderCase(await api(`/api/trips/${currentCase.case_id}/cancel`,{method:'POST',body:JSON.stringify({confirm:true,idempotency_key:`web-cancel-${currentCase.case_id}`})}));
+    }catch(e){status(e.message,true)}
+  };
+}
+$('create').onclick=async()=>{try{status('Анализирую запрос и применяю нормативные документы…');renderCase(await api('/api/trips',{method:'POST',body:JSON.stringify({request_text:$('request').value})}));status('Кейс создан')}catch(e){status(e.message,true)}};
+async function loadConfig(){const data=await api('/api/config');configs=data.roles;$('configs').innerHTML=roles.map(role=>{const c=configs[role];return `<div class="config-card"><h3>${role} model</h3><label class="label">Provider<select data-role="${role}" data-key="provider"><option value="openai" ${c.provider==='openai'?'selected':''}>OpenAI-compatible</option></select></label><label class="label">Base URL<input data-role="${role}" data-key="base_url" value="${esc(c.base_url)}"></label><label class="label">Model<input data-role="${role}" data-key="model" value="${esc(c.model)}"></label><label class="label">API key<input type="password" data-role="${role}" data-key="api_key" placeholder="${c.configured?'Сохранённый ключ':'sk-…'}"></label><span class="muted">${c.configured?'Ключ настроен':'Работа в demo fallback режиме'}</span></div>`}).join('');$('configHint').textContent=Object.values(configs).some(c=>c.configured)?'Подключён внешний LLM':'Используется локальный demo fallback'}
+$('saveConfig').onclick=async()=>{const rolesData={};roles.forEach(r=>rolesData[r]={});document.querySelectorAll('[data-role]').forEach(el=>rolesData[el.dataset.role][el.dataset.key]=el.value);try{configs=(await api('/api/config',{method:'POST',body:JSON.stringify({roles:rolesData})})).roles;$('saveStatus').textContent='Сохранено';$('configHint').textContent='Конфигурация сохранена';loadConfig()}catch(e){$('saveStatus').textContent=e.message}};
+document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.add('hidden'));tab.classList.add('active');$(tab.dataset.tab).classList.remove('hidden');if(tab.dataset.tab==='settings')loadConfig()});loadConfig().catch(()=>{});
+</script>
+</body></html>
