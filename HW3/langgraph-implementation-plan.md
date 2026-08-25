@@ -47,7 +47,60 @@ business-travel/
 
 Файл `app.py` является тонким HTTP-адаптером: он не содержит бизнес-логику и вызывает `TravelGraphs`. Веб-интерфейс находится в `static/index.html`. Это сознательный вертикальный срез; перед production-кодированием необходимо разнести методы `TravelGraphs` по модулям `graphs/intake.py`, `graphs/planning.py`, `graphs/booking.py`, `graphs/cancellation.py` и выделить nodes из `travel_system/graphs.py`.
 
-## 3. Разделение ответственности
+## 3. Протокол обмена сообщениями
+
+LangGraph не использует свободный чат между агентами. Каждый node получает `TripState` и возвращает типизированное partial update; переход к следующему node определяется графом. Это делает порядок, права и состояние операции воспроизводимыми.
+
+### Формат межагентного сообщения
+
+```python
+class AgentMessage(TypedDict):
+    case_id: str
+    run_id: str
+    sender: str
+    recipient: str
+    message_type: str
+    payload: dict[str, Any]
+    policy_snapshot: list[PolicyChunk]
+    correlation_id: str
+    idempotency_key: str | None
+```
+
+В текущем прототипе envelope логически распределён между полями `TripState`, payload объекта `Send` и `audit`; отдельный broker не подключён. В production envelope должен передаваться через durable queue/event bus для долгих workers.
+
+### Реализация каналов
+
+- `trip`/`policy_context`: parser передаёт нормализованный `TripRequest`, RAG возвращает `PolicyChunk`, а Completeness Checker и Policy Engine читают их из state.
+- `human_interrupt`: Clarification, approval, selection и cancellation nodes публикуют запрос через `interrupt`; пользовательский ответ возвращается в тот же `thread_id` через `Command(resume=...)`.
+- `search_task`: Planner создаёт задачи; `Send("search_worker", {"task": task, "trip": trip, "case_id": case_id})` запускает отдельные domain agents.
+- `search_results`: Transport/Hotel/Transfer/Visa agents возвращают нормализованные `Offer`; reducer `Annotated[list[Offer], operator.add]` объединяет результаты, не позволяя одному агенту перезаписать результат другого.
+- `booking_command`: Booking Agent передаёт Booking Service только offer IDs, hold и idempotency key. Booking Service выполняет hold/book/status и возвращает `Booking`.
+- `replan_event`: Booking/Provider возвращает `expired_hold`, `price_changed`, `unavailable`, `partial_booking` или `provider_unknown`; Replanning Agent классифицирует событие и выбирает ветку графа.
+- `audit`: каждый node добавляет событие с case ID, actor, переходом, correlation ID, policy refs и результатом.
+
+### Пример сообщения fan-out
+
+```python
+Send(
+    "search_worker",
+    {
+        "case_id": "case_123",
+        "task": {"task_id": "hotel-1", "task_type": "hotel", "mandatory": True},
+        "trip": {"destination": "Берлин", "departure_date": "2026-09-28"},
+        "policy_snapshot": [{"policy_id": "TRAVEL-003", "version": "2026.1", "citation": "Состав услуг, пункт 1"}],
+    },
+)
+```
+
+Worker не отправляет запрос напрямую другому worker: он возвращает `search_results` в fan-in. Booking Agent получает уже собранный набор alternatives. При сбое он публикует `replan_event`, а не меняет state скрытым побочным эффектом.
+
+### Пример полного обмена
+
+`Request Parser → Policy RAG → Completeness Checker → Clarification interrupt → Planner → Send(search workers) → Fan-in → Alternative Builder → Booking Agent → Booking Service`.
+
+Операционные сервисы являются границей доверия: агенты формируют намерение и данные, но не вызывают платежи, не меняют policy decision и не могут подтвердить покупку без пользовательского `Command(resume=...)`.
+
+## 4. Разделение ответственности
 
 ### Специализированные агенты
 
@@ -123,7 +176,7 @@ Ingestion публикует документ только после прове
 
 LLM не вызывает платёжные или booking API напрямую. Он использует только типизированные tools, а каждый tool проверяет права, case state и idempotency key.
 
-## 4. Контракт узлов графа
+## 5. Контракт узлов графа
 
 Каждый node принимает `TripState`, не мутирует его напрямую и возвращает частичное обновление:
 
@@ -146,7 +199,7 @@ AuditEvent(
 )
 ```
 
-## 5. Human-in-the-loop
+## 6. Human-in-the-loop
 
 Точки `interrupt()`:
 
@@ -159,7 +212,7 @@ AuditEvent(
 
 Каждое прерывание должно быть возобновляемым по `thread_id=case_id`, иметь TTL и хранить checkpoint в PostgreSQL. Повторная отправка ответа не должна создавать вторую бронь.
 
-## 6. Fan-out/fan-in
+## 7. Fan-out/fan-in
 
 Планировщик создаёт `SearchTask` для каждого применимого сервиса. LangGraph запускает worker через `Send("search_worker", task)`. Reducer добавляет результаты по `task_id`, а barrier пропускает план дальше только когда:
 
@@ -167,7 +220,7 @@ AuditEvent(
 - optional tasks либо завершены, либо явно помечены `skipped`;
 - ошибки классифицированы как retryable или terminal.
 
-## 7. Перепланирование и Saga
+## 8. Перепланирование и Saga
 
 `replan_router` классифицирует событие:
 
@@ -180,7 +233,7 @@ AuditEvent(
 
 Для каждой брони хранится saga step. Компенсация выполняется в обратном порядке, но только для фактически подтверждённых ресурсов.
 
-## 8. Минимальные интерфейсы
+## 9. Минимальные интерфейсы
 
 ```python
 class PolicyService(Protocol):
@@ -200,7 +253,7 @@ class CaseRepository(Protocol):
     async def append_event(self, event: AuditEvent) -> None: ...
 ```
 
-## 9. Безопасность и эксплуатация
+## 10. Безопасность и эксплуатация
 
 - OIDC/JWT и RBAC: employee, manager, finance, travel_manager, policy_admin.
 - Secret manager для ключей поставщиков и LLM; платёжные реквизиты не попадают в state и prompts.
@@ -210,7 +263,7 @@ class CaseRepository(Protocol):
 - Трассировка LangGraph node transitions и provider calls без содержимого секретов.
 - Webhook поставщика проверяется по подписи и дедуплицируется по event ID.
 
-## 10. План разработки после ревью
+## 11. План разработки после ревью
 
 1. Утвердить policy document format, матрицу ролей и источники поставщиков.
 2. Зафиксировать обязательные поля `TripRequest`, статусы и SLA.

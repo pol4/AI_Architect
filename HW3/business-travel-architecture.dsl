@@ -262,7 +262,7 @@ workspace {
 
             portal -> orchestrator "Создаёт кейс, отвечает на вопросы, выбирает/подтверждает вариант" "HTTPS/JSON"
             orchestrator -> policy "Получает нормы и решения" "REST"
-            orchestrator -> agents "Запускает параллельные поисковые задачи" "Internal API"
+            orchestrator -> agents "Отправляет SearchTask через LangGraph Send; получает Offer results через reducer" "Send/state channel"
             orchestrator -> booking "Выполняет hold, бронирование и отмену" "REST"
             orchestrator -> caseStore "Сохраняет состояние и аудит" "SQL"
             orchestrator -> llmGateway "Извлекает смысл и формирует вопросы/объяснения" "Internal API"
