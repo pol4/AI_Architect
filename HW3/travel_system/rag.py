@@ -8,6 +8,7 @@ from typing import Any
 
 from .state import PolicyChunk, PolicyDecision, TripRequest
 
+# Демонстрационные документы; в production источник — корпоративное хранилище.
 DEFAULT_POLICIES = [
     ("TRAVEL-001", "2026.1", "Обязательные данные", "Для командировки нужны город отправления, пункт назначения, даты выезда и возвращения, цель поездки и бюджет.", "2026-01-01"),
     ("TRAVEL-002", "2026.1", "Согласование", "Поездка с бюджетом свыше 100000 рублей требует согласования руководителя и финансового контролёра.", "2026-01-01"),
@@ -20,6 +21,7 @@ def tokenize(value: str) -> set[str]:
 
 
 class PolicyRAG:
+    # RAG-контур: ingestion нормативных документов и runtime retrieval.
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
         self._init_store()

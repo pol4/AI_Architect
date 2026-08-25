@@ -10,6 +10,7 @@ from langchain_openai import ChatOpenAI
 
 
 class LLMGateway:
+    # Единая фабрика OpenAI-compatible клиентов для ролей моделей.
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
 
@@ -19,6 +20,7 @@ class LLMGateway:
         connection.close()
         return row if row else ("https://api.openai.com/v1", "", "gpt-4o-mini")
 
+    # Возвращает клиент только при наличии сохранённого API key.
     def client(self, role: str) -> ChatOpenAI | None:
         base_url, api_key, model = self._settings(role)
         if not api_key:

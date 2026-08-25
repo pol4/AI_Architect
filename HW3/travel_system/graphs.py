@@ -14,6 +14,7 @@ from .state import TripState
 
 
 class TravelGraphs:
+    # Собирает независимые LangGraph-графы и подключает общий RAG/checkpointer.
     def __init__(self, rag: PolicyRAG):
         self.rag = rag
         self.llm = LLMGateway(rag.db_path)
@@ -34,6 +35,7 @@ class TravelGraphs:
         parsed = self.llm.invoke_json("parser", "Извлеки параметры командировки и верни JSON без выдуманных значений: departure_city, destination, departure_date, return_date, purpose, budget, currency, preferences.", text)
         return {"trip": parsed or {"purpose": text}, "status": "parsed", "audit": self._audit("REQUEST_PARSED")}
 
+    # RAG вызывается до проверки полноты и повторяется после каждого ответа.
     def _retrieve_policy_context(self, state: TripState) -> dict[str, Any]:
         context = self.rag.retrieve(state.get("trip", {}))
         return {"policy_context": context, "status": "policy_context_retrieved", "audit": self._audit("POLICY_CONTEXT_RETRIEVED")}
@@ -57,6 +59,7 @@ class TravelGraphs:
         status = "approval_pending" if any(item["decision"] == "conditional" for item in decisions) else "planning"
         return {"policy_decisions": decisions, "status": status, "next_action": "approval" if status == "approval_pending" else "plan", "audit": self._audit("POLICY_EVALUATED")}
 
+    # Conditional policy decisions требуют решения человека до поиска и бронирования.
     def _approval_interrupt(self, state: TripState) -> dict[str, Any]:
         decision = interrupt({"type": "approval", "decisions": state.get("policy_decisions", [])})
         approved = decision.get("decision") == "approved" if isinstance(decision, dict) else False
@@ -66,6 +69,7 @@ class TravelGraphs:
         tasks = build_tasks(state.get("trip", {}))
         return {"plan": {"procedures": ["policy_check", "approval_check", "parallel_search", "alternative_selection", "booking"], "search_tasks": tasks}, "search_tasks": tasks, "status": "searching", "next_action": "search", "audit": self._audit("PLAN_CREATED")}
 
+    # Send создаёт отдельный execution branch для каждого специализированного агента.
     def _dispatch_search(self, state: TripState) -> list[Send]:
         return [Send("search_worker", {"case_id": state["case_id"], "trip": state.get("trip", {}), "task": task}) for task in state.get("search_tasks", [])]
 
@@ -82,6 +86,7 @@ class TravelGraphs:
         alternatives = [{"alternative_id": "alt-1", "title": "Оптимальный вариант", "offers": offers, "total_price": sum(float(item.get("price", 0)) for item in offers), "currency": "RUB", "policy_refs": [item["policy_id"] for item in state.get("policy_context", [])]}]
         return {"alternatives": alternatives, "status": "awaiting_selection", "next_action": "select_alternative"}
 
+    # Основной граф: parse -> RAG -> completeness -> policy -> plan -> fan-out.
     def _build_trip_graph(self):
         graph = StateGraph(TripState)
         graph.add_node("parse_request", self._parse_request)
@@ -118,6 +123,7 @@ class TravelGraphs:
         bookings = self.booking_agent.book(option.get("offers", []))
         return {"bookings": bookings, "status": "confirmed", "next_action": "cancel_or_complete", "audit": self._audit("BOOKING_COMPLETED")}
 
+    # Отдельный граф бронирования запускается после выбора конкретной альтернативы.
     def _build_booking_graph(self):
         graph = StateGraph(TripState)
         graph.add_node("await_selection", self._await_selection)
@@ -143,6 +149,7 @@ class TravelGraphs:
         route = self.replanning_agent.classify(reason)
         return {"status": "searching" if route == "search" else "manual_review", "next_action": route, "audit": self._audit("REPLAN_ROUTED")}
 
+    # Replanning graph классифицирует сбой и выбирает повторный поиск или review.
     def _build_replanning_graph(self):
         graph = StateGraph(TripState)
         graph.add_node("replanning_agent", self._replan)
@@ -150,6 +157,7 @@ class TravelGraphs:
         graph.add_edge("replanning_agent", END)
         return graph.compile(checkpointer=self.checkpointer)
 
+    # Cancellation graph рассчитывает quote и ждёт подтверждение пользователя.
     def _build_cancellation_graph(self):
         graph = StateGraph(TripState)
         graph.add_node("cancellation_quote", self._cancellation_quote)

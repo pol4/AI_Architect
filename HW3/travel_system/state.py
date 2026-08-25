@@ -5,6 +5,7 @@ from datetime import date
 from typing import Annotated, Any, Literal, TypedDict
 
 
+# Данные, извлечённые из свободного запроса сотрудника.
 class TripRequest(TypedDict, total=False):
     departure_city: str
     destination: str

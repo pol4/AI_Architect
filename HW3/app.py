@@ -58,6 +58,7 @@ def save_settings(payload: dict) -> dict:
     return settings_public()
 
 
+# Графы создаются лениво после инициализации persistent policy store.
 def load_workflow() -> TravelGraphs:
     return TravelGraphs(PolicyRAG(DB_PATH))
 
@@ -89,6 +90,7 @@ def run_trip(case_id: str, request_text: str | None = None, resume: dict | None 
     return current_state(case_id)
 
 
+# HTTP-адаптер не содержит бизнес-правил и делегирует их LangGraph.
 class Handler(BaseHTTPRequestHandler):
     def send_json(self, status: int, payload: dict) -> None:
         encoded = json.dumps(payload, ensure_ascii=False).encode()

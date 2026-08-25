@@ -12,6 +12,7 @@ OFFERS: dict[str, list[Offer]] = {
 }
 
 
+# Базовый контракт search-агентов: нормализация результата поставщика в Offer.
 class BaseTravelAgent:
     name = "base"
 
@@ -19,6 +20,7 @@ class BaseTravelAgent:
         return [{**offer, "valid_until": datetime.now(timezone.utc).isoformat()} for offer in OFFERS.get(task["task_type"], [])]
 
 
+# Каждый класс ограничен своим типом travel operation и набором tools.
 class TransportSearchAgent(BaseTravelAgent):
     name = "transport_search_agent"
 
@@ -71,6 +73,7 @@ class SummaryAgent:
     name = "summary_agent"
 
 
+# Реестр search-агентов используется worker-узлом LangGraph при fan-out.
 AGENTS = {agent.name: agent for agent in (TransportSearchAgent(), HotelSearchAgent(), TransferSearchAgent(), VisaInsuranceAgent())}
 
 
