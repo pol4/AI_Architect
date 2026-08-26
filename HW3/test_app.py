@@ -22,6 +22,18 @@ class ArchitectureTests(unittest.TestCase):
             context = rag.retrieve({"destination": "гостиница", "budget": 10000})
             self.assertTrue(any(chunk["policy_id"] == "TEST-001" for chunk in context))
 
+    def test_complete_text_request_does_not_require_clarification(self):
+        from travel_system.graphs import TravelGraphs
+        from travel_system.rag import PolicyRAG
+        with tempfile.TemporaryDirectory() as directory:
+            graphs = TravelGraphs(PolicyRAG(Path(directory) / "policy.db"))
+            config = {"configurable": {"thread_id": "complete-case"}}
+            graphs.trip_graph.invoke({"case_id": "complete-case", "request_text": "Поездка из Москвы в Санкт-Петербург с 2026-09-15 по 2026-09-17 для встречи, бюджет 60000 рублей", "user_id": "demo", "audit": []}, config)
+            state = graphs.trip_graph.get_state(config).values
+            self.assertEqual(state["status"], "awaiting_selection")
+            self.assertEqual(state["missing_fields"], [])
+            self.assertEqual(state["trip"]["destination"], "Санкт-Петербург")
+
     def test_trip_graph_contains_langgraph_nodes(self):
         from travel_system.graphs import TravelGraphs
         from travel_system.rag import PolicyRAG

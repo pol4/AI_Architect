@@ -67,12 +67,17 @@ class PolicyRAG:
 
     def retrieve(self, trip: TripRequest) -> list[PolicyChunk]:
         query = tokenize(" ".join(str(value) for value in trip.values() if value))
+        destination = str(trip.get("destination") or "").strip().lower()
+        domestic_destinations = {"москва", "санкт-петербург", "екатеринбург", "казань", "новосибирск"}
+        international = bool(destination) and destination not in domestic_destinations
         connection = self._connection()
         rows = connection.execute("SELECT * FROM policy_chunks WHERE status='published'").fetchall()
         connection.close()
         scored = []
         for row in rows:
-            policy_tokens = tokenize(row["title"] if "title" in row.keys() else "") | tokenize(row["text"])
+            if row["policy_id"] == "TRAVEL-003" and not international:
+                continue
+            policy_tokens = tokenize(row["text"])
             overlap = len(query & policy_tokens)
             normalized_overlap = sum(1 for query_token in query if any(query_token in policy_token or policy_token in query_token for policy_token in policy_tokens))
             overlap = max(overlap, normalized_overlap)

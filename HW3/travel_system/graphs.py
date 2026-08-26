@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -34,7 +35,28 @@ class TravelGraphs:
     def _parse_request(self, state: TripState) -> dict[str, Any]:
         text = state.get("request_text", "")
         parsed = self.llm.invoke_json("parser", "Извлеки параметры командировки и верни JSON без выдуманных значений: departure_city, destination, departure_date, return_date, purpose, budget, currency, preferences.", text)
-        return {"trip": parsed or {"purpose": text}, "status": "parsed", "audit": self._audit("REQUEST_PARSED")}
+        return {"trip": parsed or self._fallback_parse(text), "status": "parsed", "audit": self._audit("REQUEST_PARSED")}
+
+    def _fallback_parse(self, text: str) -> dict[str, Any]:
+        trip: dict[str, Any] = {"currency": "RUB", "preferences": {}}
+        route = re.search(r"(?:из|от)\s+([А-Яа-яЁёA-Za-z -]{3,}?)\s+(?:в|до)\s+([А-Яа-яЁёA-Za-z -]{3,}?)(?=\s+(?:с|по|на|для|в)\b|,|\.|$)", text, re.IGNORECASE)
+        if route:
+            trip["departure_city"] = route.group(1).strip(" ,.")
+            trip["destination"] = route.group(2).strip(" ,.")
+        dates = re.findall(r"\b(?:20\d{2}-\d{2}-\d{2}|\d{2}\.\d{2}\.20\d{2})\b", text)
+        if dates:
+            trip["departure_date"] = dates[0]
+        if len(dates) > 1:
+            trip["return_date"] = dates[1]
+        budget = re.search(r"(\d[\d ]{2,})\s*(?:руб(?:лей|ля)?|₽|RUB)", text, re.IGNORECASE)
+        if budget:
+            trip["budget"] = float(budget.group(1).replace(" ", ""))
+        purpose = re.search(r"(?:для|цель(?:ю)?|по причине)\s+(.+?)(?=,|\.|\s+бюджет|$)", text, re.IGNORECASE)
+        if purpose:
+            trip["purpose"] = purpose.group(1).strip()
+        elif text:
+            trip["purpose"] = text.strip()
+        return trip
 
     # RAG вызывается до проверки полноты и повторяется после каждого ответа.
     def _retrieve_policy_context(self, state: TripState) -> dict[str, Any]:
