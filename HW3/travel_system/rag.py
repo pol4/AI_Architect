@@ -69,7 +69,7 @@ class PolicyRAG:
         query = tokenize(" ".join(str(value) for value in trip.values() if value))
         destination = str(trip.get("destination") or "").strip().lower()
         domestic_destinations = {"москва", "санкт-петербург", "екатеринбург", "казань", "новосибирск"}
-        international = bool(destination) and destination not in domestic_destinations
+        international = bool(destination) and not any(city in destination for city in domestic_destinations)
         connection = self._connection()
         rows = connection.execute("SELECT * FROM policy_chunks WHERE status='published'").fetchall()
         connection.close()
