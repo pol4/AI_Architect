@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -28,7 +29,7 @@ class TravelGraphs:
         self.replanning_graph = self._build_replanning_graph()
 
     def _audit(self, event: str) -> list[dict[str, str]]:
-        return [{"event": event, "at": "system"}]
+        return [{"event": event, "at": datetime.now(timezone.utc).isoformat()}]
 
     def _parse_request(self, state: TripState) -> dict[str, Any]:
         text = state.get("request_text", "")
