@@ -107,26 +107,31 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path == "/api/health":
             self.send_json(200, {"status": "ok", "langgraph": True})
-        elif self.path == "/api/config":
+            return
+        if self.path == "/api/config":
             self.send_json(200, {"roles": settings_public()})
-        elif self.path == "/api/policies":
+            return
+        if self.path == "/api/policies":
             connection = database()
             rows = connection.execute("SELECT policy_id, version, title, text, status FROM policy_documents ORDER BY policy_id").fetchall()
             connection.close()
             self.send_json(200, {"policies": [dict(row) for row in rows]})
-        elif self.path.startswith("/api/trips/"):
+            return
+        if self.path.startswith("/api/trips/"):
             self.send_json(200, current_state(self.path.rsplit("/", 1)[-1]))
-        elif self.path.split("?", 1)[0] in ("/", "/index.html"):
+            return
+        if self.path.split("?", 1)[0] in ("/", "/index.html"):
             content = (STATIC_DIR / "index.html").read_bytes()
         elif self.path.split("?", 1)[0] == "/approval.html":
             content = (STATIC_DIR / "approval.html").read_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(content)))
-            self.end_headers()
-            self.wfile.write(content)
         else:
             self.send_json(404, {"error": "Not found"})
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
 
     def do_POST(self) -> None:
         try:
