@@ -16,8 +16,12 @@ class LLMGateway:
 
     def _settings(self, role: str) -> tuple[str, str, str]:
         connection = sqlite3.connect(self.db_path)
-        row = connection.execute("SELECT base_url, api_key, model FROM settings WHERE role=?", (role,)).fetchone()
-        connection.close()
+        try:
+            row = connection.execute("SELECT base_url, api_key, model FROM settings WHERE role=?", (role,)).fetchone()
+        except sqlite3.OperationalError:
+            row = None
+        finally:
+            connection.close()
         return row if row else ("https://api.openai.com/v1", "", "gpt-4o-mini")
 
     # Возвращает клиент только при наличии сохранённого API key.

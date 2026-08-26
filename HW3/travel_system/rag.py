@@ -17,7 +17,8 @@ DEFAULT_POLICIES = [
 
 
 def tokenize(value: str) -> set[str]:
-    return {token.lower() for token in re.findall(r"[A-Za-zА-Яа-яЁё]{3,}", value)}
+    tokens = (token.lower() for token in re.findall(r"[A-Za-zА-Яа-яЁё]{3,}", value))
+    return {re.sub(r"(ами|ями|ого|ему|ому|ыми|ими|ов|ев|ы|и|а|я|е|у|ю)$", "", token) for token in tokens}
 
 
 class PolicyRAG:
@@ -71,7 +72,10 @@ class PolicyRAG:
         connection.close()
         scored = []
         for row in rows:
-            overlap = len(query & tokenize(row["text"]))
+            policy_tokens = tokenize(row["title"] if "title" in row.keys() else "") | tokenize(row["text"])
+            overlap = len(query & policy_tokens)
+            normalized_overlap = sum(1 for query_token in query if any(query_token in policy_token or policy_token in query_token for policy_token in policy_tokens))
+            overlap = max(overlap, normalized_overlap)
             if row["policy_id"] in {"TRAVEL-001", "TRAVEL-002"}:
                 overlap += 1
             if overlap:
