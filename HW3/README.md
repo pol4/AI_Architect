@@ -78,7 +78,8 @@ Runtime сохраняет snapshot использованных chunks, `policy
 - `travel_system/rag.py` — ingestion документов, chunks, provenance и runtime retrieval.
 - `travel_system/llm.py` — OpenAI-compatible `ChatOpenAI` gateway для ролей моделей.
 - `app.py` — HTTP API и web UI integration.
-- `static/index.html` — простой пользовательский интерфейс.
+- `static/index.html` — основной интерфейс создания кейса, уточнений и выбора альтернативы.
+- `static/approval.html` — отдельная форма согласования кейса по `case_id`.
 
 ## Ограничения и упрощения
 
@@ -105,12 +106,16 @@ python3 -m venv .venv
 
 Конфигурация LLM сохраняется в `travel.db`. В интерфейсе доступны отдельные настройки для `parser`, `supervisor`, `worker` и `summary`: provider, base URL, модель и API key. Ключ не возвращается в frontend после сохранения.
 
+После создания кейса интерфейс сохраняет `case_id` в query string. При возврате с approval-формы или обновлении страницы `loadCase()` загружает checkpoint state, поэтому кейс не начинается заново. На этапе выбора альтернативы используется явный radio-контрол; кнопка отправляет `alternative_id` в booking graph.
+
 ## API прототипа
 
 - `GET/POST /api/config` — чтение и сохранение конфигурации LLM.
 - `POST /api/trips` — запуск intake/planning graph.
 - `GET /api/trips/{case_id}` — получение checkpoint state.
 - `POST /api/trips/{case_id}/answers` — resume после clarification interrupt.
+- `POST /api/trips/{case_id}/approval` — согласование или отклонение policy decision.
+- `GET /approval.html?case_id=<CASE_ID>` — отдельная форма согласования.
 - `POST /api/trips/{case_id}/selection` — запуск booking graph.
 - `POST /api/trips/{case_id}/replan` — запуск replanning graph.
 - `POST /api/trips/{case_id}/cancel` — запуск cancellation graph.

@@ -97,6 +97,32 @@ paths:
                 $ref: '#/components/schemas/WorkflowAccepted'
         '409':
           $ref: '#/components/responses/Conflict'
+  /trip-cases/{case_id}/approval:
+    post:
+      tags: [Approvals]
+      summary: Принять решение по согласованию кейса
+      description: Возобновляет approval interrupt в LangGraph через Command(resume=...).
+      operationId: decideCaseApproval
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecisionRequest'
+            example:
+              decision: approved
+              comment: "Согласовано"
+      responses:
+        '202':
+          description: Решение принято; workflow продолжен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowAccepted'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /trip-cases/{case_id}/plan:
     get:
       tags: [Trip Cases]

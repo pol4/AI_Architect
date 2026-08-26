@@ -39,6 +39,9 @@ business-travel/
 | Booking graph | `travel_system/graphs.py:TravelGraphs._build_booking_graph` | Реализован demo-flow с interrupt/resume |
 | Cancellation graph | `travel_system/graphs.py:TravelGraphs._build_cancellation_graph` | Реализован demo-flow с quote и confirmation |
 | Approval interrupt | `travel_system/graphs.py:TravelGraphs._approval_interrupt` | Реализован для conditional policy decision |
+| Approval UI/API | `static/approval.html`, `app.py:/api/trips/{case_id}/approval` | Реализованы; resume по тому же `thread_id` |
+| Case restoration | `static/index.html:loadCase`, `app.py:/api/trips/{case_id}` | Реализовано через `case_id` в URL |
+| Alternative selection UI | `static/index.html` radio `offer-choice` | Реализовано; отправляет `alternative_id` в booking graph |
 | Replanning graph | `travel_system/graphs.py:TravelGraphs._build_replanning_graph` | Реализована маршрутизация причины сбоя |
 | RAG ingestion/runtime | `travel_system/rag.py:PolicyRAG` | Реализован SQLite lexical prototype |
 | OpenAI-compatible gateway | `travel_system/llm.py:LLMGateway` | Реализован для parser; остальные роли подготовлены |
