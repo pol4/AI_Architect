@@ -116,8 +116,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, {"policies": [dict(row) for row in rows]})
         elif self.path.startswith("/api/trips/"):
             self.send_json(200, current_state(self.path.rsplit("/", 1)[-1]))
-        elif self.path in ("/", "/index.html"):
+        elif self.path.split("?", 1)[0] in ("/", "/index.html"):
             content = (STATIC_DIR / "index.html").read_bytes()
+        elif self.path.split("?", 1)[0] == "/approval.html":
+            content = (STATIC_DIR / "approval.html").read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(content)))
@@ -150,6 +152,8 @@ class Handler(BaseHTTPRequestHandler):
                 case_id, action = parts[2], parts[3]
                 if action == "answers":
                     result = run_trip(case_id, resume=payload.get("answers", payload))
+                elif action == "approval":
+                    result = run_trip(case_id, resume={"decision": payload.get("decision"), "comment": payload.get("comment", "")})
                 elif action == "replan":
                     result = workflow().replanning_graph.invoke({**current_state(case_id), "replan_reason": payload.get("reason", "unavailable")}, config(case_id))
                 elif action == "selection":
