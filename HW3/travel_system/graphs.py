@@ -69,7 +69,11 @@ class TravelGraphs:
         if any(chunk["policy_id"] == "TRAVEL-003" for chunk in state.get("policy_context", [])):
             required.append("passport_data_or_visa_status")
         missing = [field for field in required if not trip.get(field)]
-        return {"missing_fields": missing, "status": "clarification_required" if missing else "policy_check", "next_action": "answer_questions" if missing else "plan"}
+        return {"missing_fields": missing, "questions": self._build_questions(missing), "status": "clarification_required" if missing else "policy_check", "next_action": "answer_questions" if missing else "plan"}
+
+    def _build_questions(self, fields: list[str]) -> list[dict[str, Any]]:
+        labels = {"departure_city": "город отправления", "destination": "пункт назначения", "departure_date": "дату выезда в формате ГГГГ-ММ-ДД", "return_date": "дату возвращения в формате ГГГГ-ММ-ДД", "purpose": "цель поездки", "budget": "бюджет в рублях", "passport_data_or_visa_status": "наличие визы или статус визовых документов"}
+        return [{"id": f"question-{field}", "field": field, "text": f"Укажите {labels.get(field, field)}.", "required": True} for field in fields]
 
     def _ask_clarification(self, state: TripState) -> dict[str, Any]:
         answers = interrupt({"type": "clarification", "case_id": state["case_id"], "missing_fields": state.get("missing_fields", [])})
