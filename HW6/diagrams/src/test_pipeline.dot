@@ -1,0 +1,17 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t"; label="Testing Strategy — уровни оценки качества RAG"; fontsize=16; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.5, nodesep=0.45, ranksep=0.95, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.5, margin="0.18,0.11"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.1];
+
+  a [label=<<B>Разработка</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">unit/компонентные: retrieval, chunker</FONT>>, fillcolor="#e0f2fe" color="#0284c7"];
+  b [label=<<B>CI: оффлайн eval</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Ragas/DeepEval на golden set, пороговые гейты</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  c [label=<<B>Предполётный тест индекса</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Index Testing до переключения (R6)</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  d [label=<<B>Canary / Blue-Green</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">ограниченный трафик</FONT>>, fillcolor="#ede9fe" color="#7c3aed"];
+  e [label=<<B>Прод: онлайн eval</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Langfuse + обратная связь пользователей</FONT>>, fillcolor="#dcfce7" color="#16a34a"];
+  f [label=<<B>Регресс + Red Team</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">по расписанию / релизу</FONT>>, fillcolor="#fef9c3" color="#ca8a04"];
+  a -> b -> c -> d -> e -> f;
+  f -> b [label="цикл", style=dashed, color="#64748b"];
+
+}

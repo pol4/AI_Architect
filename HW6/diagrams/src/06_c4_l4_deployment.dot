@@ -1,0 +1,71 @@
+digraph G {
+  rankdir=TB;
+  labelloc="t"; label="C4 L4 — Развёртывание: Kubernetes, изоляция AI-контура"; fontsize=16; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.5, nodesep=0.45, ranksep=0.95, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.5, margin="0.18,0.11"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.1];
+
+  subgraph cluster_k8s {
+    label="Kubernetes-кластер (on-prem)"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f8fafc";
+    subgraph cluster_edge {
+      label="ns: edge"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f0f9ff";
+      ingress [label=<<B>Ingress / WAF</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Kong / NGINX</FONT>>, fillcolor="#e0f2fe" color="#0284c7"];
+      webd [label=<<B>Web UI</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Deployment</FONT>>, fillcolor="#e0f2fe" color="#0284c7"];
+    }
+    subgraph cluster_app {
+      label="ns: app (service mesh, mTLS)"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#fafaff";
+      iamd [label=<<B>Identity &amp; Access</B>>];
+      orcd [label=<<B>Agent Orchestrator</B>>];
+      retrd [label=<<B>Retrieval</B>>];
+      repd [label=<<B>Report Generation</B>>];
+      curd [label=<<B>Curator / Ingestion</B>>];
+    }
+    subgraph cluster_sec {
+      label="ns: security (least privilege)"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#fff5f6";
+      guardd [label=<<B>Guardrails</B>>, fillcolor="#ffe4e6" color="#e11d48"];
+      piid [label=<<B>PII Sanitizer</B>>, fillcolor="#ffe4e6" color="#e11d48"];
+      avd [label=<<B>Content Security</B>>, fillcolor="#ffe4e6" color="#e11d48"];
+      indextestd [label=<<B>Index Testing</B>>, fillcolor="#ffe4e6" color="#e11d48"];
+    }
+    subgraph cluster_data {
+      label="ns: data"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f5feff";
+      node [shape=cylinder];
+      vdbd [label=<<B>Vector DB</B>>, fillcolor="#ecfeff" color="#0891b2"];
+      metad [label=<<B>PostgreSQL</B>>, fillcolor="#ecfeff" color="#0891b2"];
+      objd [label=<<B>MinIO / S3</B>>, fillcolor="#ecfeff" color="#0891b2"];
+      kafkad [label=<<B>Kafka</B>>, fillcolor="#ecfeff" color="#0891b2"];
+    }
+    subgraph cluster_gpu {
+      label="ns: ai-inference-gateway (GPU node pool)"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f7f5ff";
+      llmgwd [label=<<B>LLM Gateway</B>>, fillcolor="#ede9fe" color="#7c3aed"];
+    }
+    subgraph cluster_obs {
+      label="ns: observability"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f2fdf5";
+      oteld [label=<<B>OTel Collector</B>>, fillcolor="#dcfce7" color="#16a34a"];
+      langfused [label=<<B>Langfuse</B>>, fillcolor="#dcfce7" color="#16a34a"];
+      grafd [label=<<B>Grafana AI</B>>, fillcolor="#dcfce7" color="#16a34a"];
+    }
+  }
+  subgraph cluster_gpuc {
+    label="GPU-контур компании (вне кластера RAG)"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f7f5ff";
+    llm_node [label=<<B>Выделенный инференс LLM</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">vLLM / TensorRT-LLM</FONT>>, fillcolor="#ede9fe" color="#7c3aed"];
+  }
+  subgraph cluster_infra {
+    label="Контур инфраструктурного мониторинга (отдельный)"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f8fafc";
+    prom [label=<<B>Prometheus / Grafana / Zabbix</B>>, fillcolor="#f1f5f9" color="#64748b"];
+  }
+
+  ingress -> webd;
+  webd -> iamd;
+  iamd -> orcd [label="scoped-токен"];
+  orcd -> guardd [label="mTLS"];
+  orcd -> retrd [label="mTLS"];
+  retrd -> vdbd [label="mTLS + ACL"];
+  orcd -> llmgwd [label="mTLS"];
+  llmgwd -> llm_node [label="allow-list"];
+  guardd -> llm_node [label="только Guardrails имеет путь"];
+  oteld -> langfused;
+  langfused -> grafd;
+  prom -> grafd [label="инфра-метрики"];
+
+}

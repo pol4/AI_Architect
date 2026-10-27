@@ -1,0 +1,32 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t"; label="C4 L3 — Компоненты: Agent Orchestrator"; fontsize=16; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.5, nodesep=0.45, ranksep=0.95, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.5, margin="0.18,0.11"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.1];
+
+  subgraph cluster_o {
+    label="Agent Orchestrator"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#fafaff";
+    planner [label=<<B>Planner</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">декомпозиция задачи, стратегия retrieval</FONT>>];
+    toolreg [label=<<B>Tool Registry</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">allow-list инструментов и схемы</FONT>>];
+    toolpol [label=<<B>Tool Call Validator</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">проверка вызова против политик</FONT>>];
+    retr_tool [label=<<B>Retrieval Tool Adapter</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">обёртка над Retrieval Service</FONT>>];
+    report_tool [label=<<B>Report Tool Adapter</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">обёртка над Report Generation</FONT>>];
+    ctxmgr [label=<<B>Context Manager</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">сборка контекста, бюджет токенов</FONT>>];
+    gclient [label=<<B>Guardrail Client</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">валидация входа/выхода</FONT>>];
+    pclient [label=<<B>PII Client</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">детект/маскирование ПДн</FONT>>];
+    composer [label=<<B>Response Composer</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">ответ + источники + оговорки</FONT>>];
+    feedback [label=<<B>Feedback Collector</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">оценки пользователя и автооценки</FONT>>];
+  }
+  planner -> toolreg [label="выбор"];
+  planner -> toolpol [label="валидация"];
+  toolreg -> retr_tool;
+  toolpol -> gclient [label="политика"];
+  retr_tool -> ctxmgr [label="чанки"];
+  report_tool -> ctxmgr [label="поля отчёта"];
+  ctxmgr -> composer [label="контекст"];
+  gclient -> composer [label="вердикт"];
+  pclient -> retr_tool [label="маскированный запрос"];
+  composer -> feedback [label="ответ"];
+
+}

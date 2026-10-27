@@ -1,0 +1,24 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t"; label="C4 L3 — Компоненты: Curator / Ingestion"; fontsize=16; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.5, nodesep=0.45, ranksep=0.95, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.5, margin="0.18,0.11"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.1];
+
+  subgraph cluster_c {
+    label="Curator / Ingestion Service"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f5feff";
+    upload [label=<<B>Upload API</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">приём НД и метаданных</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    router [label=<<B>Format Router</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">определение формата и парсера</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    avc [label=<<B>AV Connector</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">скан на вирусы (R8)</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    poison [label=<<B>Poison/Injection Detector</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">отравление и встроенные инструкции</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    parser [label=<<B>Configurable Parser</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">PDF/DOCX/HTML с настройками</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    chunker [label=<<B>Configurable Chunker</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">стратегии и перекрытия</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    preview [label=<<B>Preview Renderer</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">превью чанков для пользователя</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    approve [label=<<B>Approval Workflow</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">согласование администратором НД</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    acl [label=<<B>ACL Tagger</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">теги доступа на чанки</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    idxbuild [label=<<B>Index Builder</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">эмбеддинг, шифрование, сборка коллекции</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    switch [label=<<B>Blue/Green Switcher</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">атомарное переключение указателя</FONT>>, fillcolor="#fef9c3" color="#ca8a04"];
+  }
+  upload -> router -> avc -> poison -> parser -> chunker -> preview -> approve -> acl -> idxbuild -> switch;
+
+}

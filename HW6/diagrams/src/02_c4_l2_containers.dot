@@ -1,0 +1,90 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t"; label="C4 L2 — Контейнеры"; fontsize=16; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.5, nodesep=0.45, ranksep=0.95, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.5, margin="0.18,0.11"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.1];
+
+  subgraph cluster_edge {
+    label="Периметр"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f8fafc";
+    gw [label=<<B>API Gateway / WAF / BFF</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">TLS, WAF, rate limiting, маршрутизация</FONT>>, fillcolor="#e0f2fe" color="#0284c7"];
+    web [label=<<B>Web UI</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">React SPA: чат, отчёты, портал НД, дашборды</FONT>>, fillcolor="#e0f2fe" color="#0284c7"];
+  }
+  subgraph cluster_app {
+    label="Прикладные сервисы"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#fafaff";
+    iam [label=<<B>Identity &amp; Access</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">scoped-токены, ACL-теги, флаг PII</FONT>>];
+    orch [label=<<B>Agent Orchestrator</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">планирование, tool-calling, retrieval</FONT>>];
+    retr [label=<<B>Retrieval Service</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">hybrid search, ACL-фильтр, реранкинг</FONT>>];
+    reportgen [label=<<B>Report Generation</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">автозаполнение стандартных отчётов</FONT>>];
+    curator [label=<<B>Curator / Ingestion</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">загрузка НД, версии, approval</FONT>>];
+  }
+  subgraph cluster_sec {
+    label="Безопасность и качество"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#fff5f6";
+    guard [label=<<B>Guardrails</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">валидация входа/выхода, антиинъекции, tool-policy</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    pii [label=<<B>PII Sanitizer</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">детект/маскирование ПДн по правам</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    avscan [label=<<B>Content Security</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">AV + детект отравления данных</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    indextest [label=<<B>Index Testing &amp; Consistency</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">проверка перед переключением</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    eval [label=<<B>Evaluation Service</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Ragas/DeepEval: faithfulness, relevancy</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  }
+  subgraph cluster_ai {
+    label="AI-контур"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f7f5ff";
+    llmgw [label=<<B>LLM Gateway</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">единая точка вызова, квоты, mTLS</FONT>>, fillcolor="#ede9fe" color="#7c3aed"];
+  }
+  subgraph cluster_data {
+    label="Данные"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f5feff";
+    node [shape=cylinder];
+    vdb [label=<<B>Vector DB (multi-tenant)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">зашифрованные чанки, партиции доступа</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    meta [label=<<B>Metadata &amp; ACL</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">ACL чанков, версии, указатель индекса</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    audit [label=<<B>Audit Log (WORM)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">неизменяемый журнал</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    objst [label=<<B>Object Storage</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">сырые НД, снапшоты индекса</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    node [shape=box];
+    mq [label=<<B>Message Broker (Kafka)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">конвейер ingestion и оценок</FONT>>, fillcolor="#fef9c3" color="#ca8a04"];
+    kmsc [label=<<B>Key Service</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">envelope-шифрование KEK/DEK</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+  }
+  subgraph cluster_obs {
+    label="AI-наблюдаемость (отдельно от инфры)"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f2fdf5";
+    otel [label=<<B>OTel Collector</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">приём трасс/метрик/логов</FONT>>, fillcolor="#dcfce7" color="#16a34a"];
+    aiobs [label=<<B>Langfuse / LangSmith</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">трассы агента, промпты, оценки, стоимость</FONT>>, fillcolor="#dcfce7" color="#16a34a"];
+    graf [label=<<B>Grafana AI &amp; Quality</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">дашборды качества и тестов</FONT>>, fillcolor="#dcfce7" color="#16a34a"];
+  }
+  subgraph cluster_ext {
+    label="Внешние системы"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f8fafc";
+    node [fillcolor="#f1f5f9" color="#64748b"];
+    idp [label=<<B>IdP / SSO</B>>];
+    llm [label=<<B>Выделенный инференс LLM</B>>];
+    av [label=<<B>AV-сервис</B>>];
+    siem [label=<<B>SIEM</B>>];
+    infra [label=<<B>Инфра-мониторинг</B>>];
+    notify [label=<<B>Уведомления</B>>];
+  }
+
+  web -> gw [label="HTTPS"];
+  gw -> iam [label="проверка прав"];
+  gw -> orch [label="запросы"];
+  gw -> curator [label="ingestion"];
+  orch -> guard [label="валидация"];
+  orch -> pii [label="ПДн"];
+  orch -> retr [label="поиск"];
+  orch -> reportgen [label="отчёт"];
+  orch -> llmgw [label="LLM"];
+  llmgw -> guard [label="политики"];
+  llmgw -> llm [label="инференс"];
+  retr -> vdb [label="ACL-поиск"];
+  retr -> meta [label="ACL/мета"];
+  retr -> kmsc [label="расшифровка"];
+  curator -> avscan [label="скан"];
+  curator -> indextest [label="проверка"];
+  indextest -> eval [label="тест-сьют"];
+  indextest -> graf [label="отчёты"];
+  curator -> mq [label="задачи"];
+  orch -> otel [label="трассы"];
+  guard -> otel [label="метрики"];
+  eval -> aiobs [label="оценки"];
+  aiobs -> graf [label="данные"];
+  orch -> audit [label="журнал"];
+  guard -> siem [label="события"];
+  infra -> graf [label="инфра-метрики"];
+  iam -> idp [label="OIDC"];
+  orch -> notify [label="уведомления"];
+
+}

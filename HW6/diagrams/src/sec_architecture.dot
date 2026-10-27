@@ -1,0 +1,53 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t"; label="Security Layer — общая схема защиты"; fontsize=16; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.5, nodesep=0.45, ranksep=0.95, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.5, margin="0.18,0.11"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.1];
+
+  subgraph cluster_u { label="Пользователь / Администратор НД"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#fffdf7";
+    req [label=<<B>Запрос + вопрос</B>>, fillcolor="#fff7ed" color="#ea580c"];
+  }
+  subgraph cluster_edge { label="Периметр"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f0f9ff";
+    waf [label=<<B>API Gateway + WAF</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">TLS, rate limit, размер запроса</FONT>>, fillcolor="#e0f2fe" color="#0284c7"];
+    iam [label=<<B>Identity &amp; Access</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">SSO/MFA, scoped-токен, ACL + флаг PII</FONT>>, fillcolor="#e0f2fe" color="#0284c7"];
+  }
+  subgraph cluster_sec { label="Security Layer (выделенные сервисы)"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#fff5f6";
+    cs [label=<<B>Content Security</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">AV-скан + poison/инъекции</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    pii [label=<<B>PII Sanitizer</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">NER + маскирование/токенизация</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    gin [label=<<B>Guardrails: Input Guard</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">prompt injection / jailbreak</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    gtool [label=<<B>Guardrails: Tool-Call Policy</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">allow-list, аргументы, лимиты</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    gout [label=<<B>Guardrails: Output Guard</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">groundedness + safety + schema</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  }
+  subgraph cluster_ai { label="AI-контур"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f7f5ff";
+    orch [label=<<B>Agent Orchestrator</B>>, fillcolor="#ede9fe" color="#7c3aed"];
+    retr [label=<<B>Retrieval + Vector DB</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">ACL на уровне БД, шифрование чанков</FONT>>, fillcolor="#ede9fe" color="#7c3aed"];
+    llmgw [label=<<B>LLM Gateway</B>>, fillcolor="#ede9fe" color="#7c3aed"];
+    llm [label=<<B>Выделенный инференс LLM</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">доступ только через Guardrails</FONT>>, fillcolor="#ede9fe" color="#7c3aed"];
+  }
+  subgraph cluster_data { label="Данные и аудит"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#f5feff";
+    node [shape=cylinder];
+    vdb [label=<<B>Vector DB</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">зашифрованные чанки</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    kms [label=<<B>KMS / HSM</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">KEK / DEK</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    aud [label=<<B>Immutable Audit Log</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">allow/deny/transform</FONT>>, fillcolor="#ecfeff" color="#0891b2"];
+    node [shape=box];
+    siem [label=<<B>SIEM</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">события ИБ</FONT>>, fillcolor="#f1f5f9" color="#64748b"];
+  }
+  req -> waf -> iam -> cs -> pii -> orch;
+  orch -> gin;
+  gin -> retr [label="allow"];
+  orch -> gtool;
+  gin -> llmgw [label="allow"];
+  llmgw -> llm;
+  llm -> gout [label="ответ"];
+  gout -> orch;
+  orch -> req [label="ответ", color="#16a34a"];
+  retr -> vdb;
+  vdb -> kms [label="расшифровка", style=dashed];
+  gin -> aud [label="вердикт"];
+  gtool -> aud [label="вердикт"];
+  gout -> aud [label="вердикт"];
+  aud -> siem;
+  gin -> siem [label="атака", style=dashed, color="#e11d48"];
+
+}

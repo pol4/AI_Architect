@@ -1,0 +1,32 @@
+digraph G {
+  rankdir=TB;
+  labelloc="t"; label="Guardrails — валидация ответов и защита от инъекций и злоупотребления инструментами"; fontsize=16; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.5, nodesep=0.45, ranksep=0.95, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.5, margin="0.18,0.11"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.1];
+
+  q [label=<<B>Вход: запрос + retrieved-контекст</B>>, fillcolor="#e0f2fe" color="#0284c7"];
+  i1 [label=<<B>Input Guard</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">классификатор инъекций/jailbreak; детект инструкций в данных</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  t [label=<<B>Tool-Call Policy Engine</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">allow-list, аргументы, лимиты, запрет деструктивных вызовов</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  llmc [label=<<B>Вызов LLM (через Gateway)</B>>, fillcolor="#ede9fe" color="#7c3aed"];
+  o1 [label=<<B>Output Guard: Groundedness</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">faithfulness к источникам, schema, PII</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  o2 [label=<<B>Output Guard: Safety</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">токсичность, запрещённые темы</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  blk [label=<<B>Блок + безопасный отказ</B>>, fillcolor="#fecaca" color="#b91c1c"];
+  ok [label=<<B>Ответ пользователю + источники</B>>, fillcolor="#dcfce7" color="#16a34a"];
+  aud [label=<<B>Audit: allow/deny/transform + причина</B>>, shape=cylinder, fillcolor="#ecfeff" color="#0891b2"];
+  siem [label=<<B>SIEM / алерты ИБ</B>>, fillcolor="#f1f5f9" color="#64748b"];
+  q -> i1;
+  i1 -> blk [label="deny", color="#e11d48"];
+  i1 -> t [label="allow / transform"];
+  t -> blk [label="deny", color="#e11d48"];
+  t -> llmc [label="allow"];
+  llmc -> o1 -> o2;
+  o2 -> ok [label="pass", color="#16a34a"];
+  o2 -> blk [label="fail", color="#e11d48"];
+  blk -> aud;
+  ok -> aud;
+  i1 -> aud [style=dashed];
+  t -> aud [style=dashed];
+  aud -> siem;
+
+}

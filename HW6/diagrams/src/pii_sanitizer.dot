@@ -1,0 +1,25 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t"; label="PII Sanitizer — скрытие персональных данных перед отправкой в LLM"; fontsize=16; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.5, nodesep=0.45, ranksep=0.95, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.5, margin="0.18,0.11"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.1];
+
+  inp [label=<<B>Запрос пользователя + контекст чанков</B>>, fillcolor="#e0f2fe" color="#0284c7"];
+  det [label=<<B>Детектор ПДн</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">NER + regex: ФИО, тел., паспорт, СНИЛС, ИНН, адрес, email</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  pol [label=<<B>Права пользователя: pii_allowed?</B>>, shape=diamond, fillcolor="#fef9c3" color="#ca8a04"];
+  pas [label=<<B>Пропуск без изменений</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">+ аудит доступа к ПДн</FONT>>, fillcolor="#dcfce7" color="#16a34a"];
+  mask [label=<<B>Маскирование/токенизация</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">[PII_1], [PII_2] + reversible map в secure vault</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  send [label=<<B>Отправка в LLM</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">только маскированный текст</FONT>>, fillcolor="#ede9fe" color="#7c3aed"];
+  restore [label=<<B>Обратное восстановление</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">только для авторизованного пользователя</FONT>>, fillcolor="#e0f2fe" color="#0284c7"];
+  aud [label=<<B>Аудит</B>>, shape=cylinder, fillcolor="#ecfeff" color="#0891b2"];
+  inp -> det -> pol;
+  pol -> pas [label="Да"];
+  pol -> mask [label="Нет"];
+  mask -> send;
+  send -> restore;
+  pas -> aud;
+  mask -> aud;
+  restore -> aud;
+
+}

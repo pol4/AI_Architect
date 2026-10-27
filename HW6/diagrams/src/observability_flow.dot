@@ -1,0 +1,37 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t"; label="Observability — потоки телеметрии AI- и инфра-контуров"; fontsize=16; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.5, nodesep=0.45, ranksep=0.95, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.5, margin="0.18,0.11"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.1];
+
+  app [label=<<B>Orchestrator / Retrieval / Guardrails / ReportGen</B>>, fillcolor="#eef2ff" color="#4f46e5"];
+  lfapp [label=<<B>LLM-вызовы</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">трассы, токены, стоимость</FONT>>, fillcolor="#ede9fe" color="#7c3aed"];
+  guard [label=<<B>Guardrails вердикты</B>>, fillcolor="#ffe4e6" color="#e11d48"];
+  eval [label=<<B>Evaluation Service</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">оценки Ragas/DeepEval</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  otel [label=<<B>OTel Collector</B>>, fillcolor="#dcfce7" color="#16a34a"];
+  prom [label=<<B>Prometheus</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">метрики</FONT>>, fillcolor="#dcfce7" color="#16a34a"];
+  tempo [label=<<B>Tempo</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">трассы</FONT>>, fillcolor="#dcfce7" color="#16a34a"];
+  loki [label=<<B>Loki</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">логи</FONT>>, fillcolor="#dcfce7" color="#16a34a"];
+  lf [label=<<B>Langfuse / LangSmith</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">промпты, оценки, стоимость</FONT>>, fillcolor="#dcfce7" color="#16a34a"];
+  graf [label=<<B>Grafana: AI &amp; Quality</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">единая визуализация</FONT>>, fillcolor="#dcfce7" color="#16a34a"];
+  infra [label=<<B>Инфраструктурный мониторинг (отдельно)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Prometheus / Zabbix</FONT>>, fillcolor="#f1f5f9" color="#64748b"];
+  grafi [label=<<B>Grafana: Infra</B>>, fillcolor="#f1f5f9" color="#64748b"];
+  am [label=<<B>Alertmanager</B>>, fillcolor="#fef9c3" color="#ca8a04"];
+  notify [label=<<B>Уведомления: пользователи + администраторы + on-call</B>>, fillcolor="#fff7ed" color="#ea580c"];
+  app -> otel [label="OTLP"];
+  lfapp -> lf;
+  guard -> otel [label="события"];
+  eval -> lf [label="оценки"];
+  otel -> prom;
+  otel -> tempo;
+  otel -> loki;
+  prom -> graf;
+  tempo -> graf;
+  loki -> graf;
+  lf -> graf;
+  infra -> grafi;
+  graf -> am [label="алерты"];
+  am -> notify;
+
+}

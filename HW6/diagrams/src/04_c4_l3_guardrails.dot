@@ -1,0 +1,27 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t"; label="C4 L3 — Компоненты: Guardrails Service"; fontsize=16; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.5, nodesep=0.45, ranksep=0.95, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.5, margin="0.18,0.11"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.1];
+
+  subgraph cluster_g {
+    label="Guardrails Service"; style="rounded,filled"; color="#cbd5e1"; penwidth=1.2; fontname="DejaVu Sans"; fontsize=12; fontcolor="#334155"; fillcolor="#fff5f6";
+    ingress [label=<<B>Ingress Policy API</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">приём запроса на валидацию</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    injdet [label=<<B>Input Guard</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">инъекции / jailbreak</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    toolengine [label=<<B>Tool-Call Policy Engine</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">allow-list, аргументы, лимиты</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    outguard [label=<<B>Output Guard: Groundedness</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">faithfulness, schema-валидация</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    tox [label=<<B>Output Guard: Safety</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">токсичность, запрещённые темы</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    polstore [label=<<B>Policy Store</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">версионируемые политики</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+    decide [label=<<B>Decision &amp; Audit</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">allow/deny/transform + причина</FONT>>, fillcolor="#ffe4e6" color="#e11d48"];
+  }
+  ingress -> injdet [label="вход"];
+  injdet -> decide [label="вердикт входа"];
+  ingress -> toolengine [label="tool-call"];
+  toolengine -> polstore [label="политики"];
+  ingress -> outguard [label="ответ LLM"];
+  outguard -> tox;
+  outguard -> decide [label="вердикт выхода"];
+  decide -> polstore [label="правила"];
+
+}

@@ -1,0 +1,43 @@
+digraph G {
+  rankdir=TB;
+  labelloc="t"; label="C4 L1 — Контекст: Агентная RAG-система нормативной поддержки"; fontsize=16; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.5, nodesep=0.45, ranksep=0.95, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.5, margin="0.18,0.11"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.1];
+
+  node [fillcolor="#fff7ed" color="#ea580c"];
+  user [label=<<B>Сотрудник (Пользователь)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">вопросы по НД, ответы и отчёты</FONT>>];
+  km [label=<<B>Администратор НД</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">загрузка/актуализация НД</FONT>>];
+  sec [label=<<B>Специалист по ИБ</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">политики guardrails, инциденты</FONT>>];
+  admin [label=<<B>Администратор системы</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">доступы, версии индекса</FONT>>];
+  {rank=same; user; km; sec; admin;}
+
+  node [fillcolor="#eef2ff" color="#4f46e5" penwidth=2.8 fontsize=13];
+  rag [label=<<B>Агентная RAG-система нормативной поддержки</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">подбор НД · ответы · автозаполнение отчётов · версии индекса</FONT>>];
+
+  node [fillcolor="#f1f5f9" color="#64748b" penwidth=1.2];
+  idp [label=<<B>IdP / SSO</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">аутентификация, роли, право на ПДн</FONT>>];
+  llm [label=<<B>Выделенный инференс LLM</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">GPU-контур; доступ только через Guardrails</FONT>>];
+  sources [label=<<B>Источники НД</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">СЭД, файловые шары, 1С, Confluence</FONT>>];
+  av [label=<<B>Антивирусный сервис</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">скан на вредоносный код</FONT>>];
+  kms [label=<<B>KMS / HSM</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">ключи шифрования чанков</FONT>>];
+  siem [label=<<B>SIEM</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">события безопасности</FONT>>];
+  infra [label=<<B>Инфраструктурный мониторинг</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">отдельный контур: узлы, сеть, БД, GPU</FONT>>];
+  notify [label=<<B>Каналы уведомлений</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Email / Teams / Telegram</FONT>>];
+  {rank=same; idp; llm; sources; av;}
+  {rank=same; kms; siem; infra; notify;}
+
+  user -> rag [label="вопросы / отчёты"];
+  km -> rag [label="загрузка НД"];
+  sec -> rag [label="политики"];
+  admin -> rag [label="доступы / индекс"];
+  rag -> idp [label="OIDC/SAML"];
+  rag -> llm [label="инференс"];
+  rag -> sources [label="чтение НД"];
+  rag -> av [label="скан"];
+  rag -> kms [label="ключи"];
+  rag -> siem [label="события"];
+  rag -> infra [label="метрики"];
+  rag -> notify [label="уведомления"];
+
+}
