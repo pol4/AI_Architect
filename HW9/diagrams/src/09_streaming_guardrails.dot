@@ -1,0 +1,39 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t";
+  label="Потоковые guardrails: hold-back окно, release-then-check и ранний cancel";
+  fontsize=18; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.6, nodesep=0.42, ranksep=1.0, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#dcfce7", color="#16a34a", fontcolor="#0f172a", penwidth=1.6, margin="0.22,0.14"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.15];
+
+  vllm  [label=<<B>vLLM — поток токенов</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">генерация по токенам</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+  gate  [label=<<B>Stream Gate + буфер</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">hold-back окно δ:<BR/>K токенов / граница предложения / T мс</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+
+  subgraph cluster_checks {
+    label=<<B>Потоковые проверки (параллельно, по чанкам)</B>>; fontname="DejaVu Sans"; fontsize=12; fontcolor="#dc2626";
+    style="rounded,filled"; color="#fca5a5"; bgcolor="#fef2f2"; penwidth=1.4; margin=14;
+    sc [label=<<B>Стриминг-сканеры (CPU)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">regex, blacklists, PII-автомат<BR/>O(1) на токен, ~0 задержки</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+    cl [label=<<B>Classifier-окна (GPU)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">harm/injection на окне,<BR/>stride + overlap</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+    jd [label=<<B>Streaming judge</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">checkpoints, только gray-zone</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+  }
+
+  fus [label=<<B>Fusion (sliding-window, stateful)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">накопление риска по окнам,<BR/>монотонность, границы чанков не сбрасывают состояние</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+  rel [label=<<B>Release</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">отдать ТОЛЬКО валидированный префикс</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+  ab  [label=<<B>BLOCK / early-abort</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">cancel inference + стоп release</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+  cli [label=<<B>Клиент (SSE)</B>>, fillcolor="#eef2ff", color="#4f46e5"];
+
+  vllm -> gate;
+  gate -> sc [color="#dc2626", penwidth=1.6];
+  gate -> cl [color="#dc2626", penwidth=1.6];
+  gate -> jd [color="#7c3aed", penwidth=1.6];
+  sc -> fus; cl -> fus; jd -> fus;
+  fus -> rel [label="PASS окна", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  fus -> ab  [label="BLOCK / early-abort", color="#dc2626", fontcolor="#b91c1c", penwidth=1.8];
+  rel -> cli [penwidth=1.6];
+  ab  -> vllm [label="cancel", color="#dc2626", style=dashed, constraint=false];
+  gate -> cli [label="release-then-check: токены сразу, проверка параллельно", color="#94a3b8", fontcolor="#64748b", style=dashed, constraint=false];
+
+  note [label=<<B>Две стратегии</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Release-then-check — минимум задержки, но уже отданное не «отозвать»<BR/>→ годится только для остановки продолжения.<BR/>Hold-back — сначала проверка окна, потом отдача: защищает, но добавляет δ<BR/>к TTFT и требует буферов. Категории риска выбирают свою стратегию.</FONT>>, shape=note, fillcolor="#f1f5f9", color="#94a3b8"];
+  note -> fus [style=dashed, color="#94a3b8", dir=none];
+}

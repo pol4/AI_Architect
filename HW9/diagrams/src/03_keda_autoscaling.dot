@@ -1,0 +1,48 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t";
+  label="KEDA-автоскейлинг Inference-подов по метрике очереди";
+  fontsize=18; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.6, nodesep=0.45, ranksep=1.1, splines=spline];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#dcfce7", color="#16a34a", fontcolor="#0f172a", penwidth=1.6, margin="0.22,0.14"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.15];
+
+  subgraph cluster_src {
+    label=<<B>Метрики (Prometheus)</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#64748b";
+    style="rounded,filled"; color="#cbd5e1"; bgcolor="#f8fafc"; penwidth=1.4; margin=16;
+    m_queue [label=<<B>queue_depth</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">длина priority-очереди (Kafka lag)</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+    m_wait  [label=<<B>vllm:num_requests_waiting</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">ожидание в батчере</FONT>>, fillcolor="#f1f5f9", color="#94a3b8"];
+    m_kv    [label=<<B>KV-cache utilization</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">DCGM: gpu_cache_usage</FONT>>, fillcolor="#f1f5f9", color="#94a3b8"];
+    m_gpu   [label=<<B>GPU utilization (DCGM)</B>>, fillcolor="#f1f5f9", color="#94a3b8"];
+  }
+
+  subgraph cluster_ctrl {
+    label=<<B>Autoscaling control plane</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#ca8a04";
+    style="rounded,filled"; color="#fde68a"; bgcolor="#fffbeb"; penwidth=1.4; margin=16;
+    keda [label=<<B>KEDA ScaledObject</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">trigger: Prometheus (queue_depth)<BR/>desired = ceil(queue / target_per_pod)</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+    hpa  [label=<<B>HPA</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">min=warm N, max=K, scale-up быстро,<BR/>scale-down stabilization 300 с</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+    nc   [label=<<B>Node Autoscaler</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Karpenter: +GPU-ноды, warm pool</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+  }
+
+  subgraph cluster_work {
+    label=<<B>Inference-поды (GPU B300)</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#16a34a";
+    style="rounded,filled"; color="#86efac"; bgcolor="#f0fdf4"; penwidth=1.4; margin=16;
+    pod1 [label=<<B>vLLM pod #1</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">warm</FONT>>];
+    pod2 [label=<<B>vLLM pod #2</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">warm</FONT>>];
+    podN [label=<<B>vLLM pod #N</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">scaled out</FONT>>, style="rounded,filled,dashed"];
+  }
+
+  m_queue -> keda [penwidth=1.8, color="#4f46e5", fontcolor="#4338ca"];
+  m_wait  -> keda [style=dashed];
+  m_kv    -> keda [style=dashed];
+  m_gpu   -> keda [style=dashed];
+  keda -> hpa [label="target", color="#ca8a04", fontcolor="#a16207", penwidth=1.8];
+  hpa  -> pod1 [label="replicas", color="#ca8a04", fontcolor="#a16207", penwidth=1.8];
+  hpa  -> pod2 [color="#ca8a04", penwidth=1.8];
+  hpa  -> podN [color="#ca8a04", penwidth=1.8];
+  hpa  -> nc   [label="нет свободных GPU-нод", color="#ca8a04", fontcolor="#a16207", style=dashed];
+  nc   -> podN [label="выделяет ноду", color="#16a34a", fontcolor="#15803d", style=dashed];
+  pod1 -> m_queue [style=dotted, color="#94a3b8", label="consume", fontcolor="#64748b"];
+  pod2 -> m_queue [style=dotted, color="#94a3b8"];
+  podN -> m_queue [style=dotted, color="#94a3b8"];
+}

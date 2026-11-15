@@ -1,0 +1,50 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t";
+  label="Биллинг запросов LLMaaS: квоты на hot-path + асинхронный usage-пайплайн";
+  fontsize=18; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.6, nodesep=0.42, ranksep=1.1, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#e0e7ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.6, margin="0.22,0.14"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.15];
+
+  subgraph cluster_hot {
+    label=<<B>Hot path (синхронно, бюджет &lt; 200 мс)</B>>; fontname="DejaVu Sans"; fontsize=12; fontcolor="#0284c7";
+    style="rounded,filled"; color="#7dd3fc"; bgcolor="#f0f9ff"; penwidth=1.4; margin=14;
+    client [label=<<B>Клиент</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">WebUI / API</FONT>>, fillcolor="#eef2ff", color="#4f46e5"];
+    gw     [label=<<B>API Gateway</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">auth, routing, эмиссия usage-событий</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+    quota  [label=<<B>Quota / Budget Service</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">real-time лимиты, токен-бакеты</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+    redis  [label=<<B>Redis</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">счётчики квот, бюджеты</FONT>>, shape=cylinder, style=filled, fillcolor="#e2e8f0", color="#475569"];
+    serv   [label=<<B>Serving (vLLM)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">prompt/completion tokens, модальность</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+  }
+
+  subgraph cluster_usage {
+    label=<<B>Usage-пайплайн (асинхронно, не на критическом пути)</B>>; fontname="DejaVu Sans"; fontsize=12; fontcolor="#4f46e5";
+    style="rounded,filled"; color="#c7d2fe"; bgcolor="#eef2ff"; penwidth=1.4; margin=14;
+    bus    [label=<<B>Usage Event Bus</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Kafka: usage.events, at-least-once</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+    ledger [label=<<B>Usage Ledger</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">append-only, дедуп по request_id</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+    rating [label=<<B>Rating Engine</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">price book: per-token/модальность/скидки</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+    price  [label=<<B>Price Book / Тарифы</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">версионируемые rate cards</FONT>>, shape=cylinder, style=filled, fillcolor="#e2e8f0", color="#475569"];
+    agg    [label=<<B>Billing Aggregator</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">сверка, период, tenant/model</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+    invo   [label=<<B>Invoicing → ERP</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">1C / SAP, счета, акты</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+    recon  [label=<<B>Reconciliation</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">batch-сверка, поиск gaps/дублей</FONT>>, fillcolor="#f1f5f9", color="#94a3b8"];
+    show   [label=<<B>Showback / Chargeback</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">дашборды по подразделениям</FONT>>, fillcolor="#f1f5f9", color="#94a3b8"];
+  }
+
+  client -> gw;
+  gw     -> quota [label="check (sync, ~1 мс)", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  quota  -> redis [penwidth=1.6];
+  gw     -> serv  [label="вызов инференса", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  gw     -> bus   [label="usage event (async, fire-and-forget)", color="#4f46e5", fontcolor="#4338ca", penwidth=1.8];
+  serv   -> bus   [label="token/usage stats", color="#4f46e5", fontcolor="#4338ca", penwidth=1.6];
+  bus    -> ledger [color="#4f46e5", fontcolor="#4338ca", penwidth=1.6];
+  ledger -> rating [color="#7c3aed", fontcolor="#6d28d9", penwidth=1.6];
+  price  -> rating [style=dashed, color="#94a3b8", dir=both];
+  rating -> agg   [color="#4f46e5", fontcolor="#4338ca", penwidth=1.6];
+  agg    -> invo  [label="закрытие периода", color="#ca8a04", fontcolor="#a16207", penwidth=1.6];
+  agg    -> show  [style=dashed, color="#94a3b8"];
+  ledger -> recon [style=dashed, color="#94a3b8"];
+  gw     -> recon [style=dashed, color="#94a3b8", label="сверка счётчиков", fontcolor="#64748b", constraint=false];
+
+  note [label=<<B>Принцип</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Биллинг НИКОГДА не блокирует ответ: на hot-path только быстрая<BR/>проверка квоты; учёт токенов уходит в Kafka. Идемпотентность по<BR/>request_id даёт ровно один биллинг при ретраях и дубликатах.</FONT>>, shape=note, fillcolor="#f1f5f9", color="#94a3b8"];
+  note -> bus [style=dashed, color="#94a3b8", dir=none];
+}

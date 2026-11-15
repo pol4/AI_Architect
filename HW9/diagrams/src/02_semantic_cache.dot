@@ -1,0 +1,40 @@
+digraph G {
+  rankdir=TB;
+  labelloc="t";
+  label="Semantic Cache — алгоритм (L1 Edge → L2 Redis Vector)";
+  fontsize=18; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.6, nodesep=0.4, ranksep=0.6, splines=spline];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#ccfbf1", color="#0d9488", fontcolor="#0f172a", penwidth=1.6, margin="0.22,0.14"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.15];
+
+  q        [label=<<B>Запрос пользователя</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">messages, model, temperature, tenant</FONT>>, fillcolor="#eef2ff", color="#4f46e5"];
+  norm     [label=<<B>1. Нормализация и ключ</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">key = hash(normalize(prompt) + model + params + tenant + locale)</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+  l1       [label=<<B>2. L1 (Edge) — точный хэш</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">in-memory/TTL 5 мин, ~1-2 мс</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+  l1hit    [label=<<B>HIT L1 → ответ</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">~80 мс end-to-end</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+  emb      [label=<<B>3. Эмбеддинг запроса</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">bge-large / e5, батчинг, GPUDirect, ~5-10 мс</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+  ann      [label=<<B>4. ANN-поиск (L2 Redis Vector / pgvector)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">HNSW/IVF, top-k, фильтры по model/tenant, ~3-5 мс</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+  sim      [label=<<B>5. Similarity-гейт</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">cosine ≥ τ (τ≈0.92), top-1</FONT>>, shape=diamond, fillcolor="#fef9c3", color="#ca8a04"];
+  val      [label=<<B>6. Валидация кандидата</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">TTL, версия модели, права tenant, policy</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+  ok       [label=<<B>Свежо и разрешено?</B>>, shape=diamond, fillcolor="#fef9c3", color="#ca8a04"];
+  l2hit    [label=<<B>HIT L2 → ответ</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">+ promote в L1 (LRU/LFU)</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+  miss     [label=<<B>7. MISS → инференс</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Guardrails → vLLM (batching)</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+  store    [label=<<B>8. Запись в кэш</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">эмбеддинг + ответ + TTL + provenance, только temp≈0</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+  out      [label=<<B>Ответ клиенту</B>>, fillcolor="#dcfce7", color="#16a34a"];
+
+  q -> norm -> l1;
+  l1 -> l1hit [label="exact hit", color="#16a34a", fontcolor="#15803d"];
+  l1 -> emb   [label="miss", color="#0d9488", fontcolor="#0f766e"];
+  emb -> ann -> sim;
+  sim -> val   [label="Да", color="#16a34a", fontcolor="#15803d"];
+  sim -> miss  [label="Нет", color="#dc2626", fontcolor="#b91c1c"];
+  val -> ok;
+  ok -> l2hit   [label="Да", color="#16a34a", fontcolor="#15803d"];
+  ok -> miss    [label="Нет", color="#dc2626", fontcolor="#b91c1c"];
+  l1hit -> out;
+  l2hit -> out;
+  miss -> store [label="ответ от LLM", color="#0d9488", fontcolor="#0f766e"];
+  store -> out;
+
+  note [label=<<B>Инвалидация</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">pub/sub (Redis Streams): смена версии модели, правка политик,<BR/>истечение TTL — точечный сброс по тегу. Кэш ключуется версией модели.</FONT>>, shape=note, fillcolor="#f1f5f9", color="#94a3b8"];
+  note -> ann [style=dashed, color="#94a3b8", dir=none];
+}

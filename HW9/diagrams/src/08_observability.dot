@@ -1,0 +1,45 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t";
+  label="Наблюдаемость LLMaaS: метрики · логи · трейсы";
+  fontsize=18; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.6, nodesep=0.42, ranksep=1.05, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#e0f2fe", color="#0284c7", fontcolor="#0f172a", penwidth=1.6, margin="0.22,0.14"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.15];
+
+  subgraph cluster_src {
+    label=<<B>Источники телеметрии</B>>; fontname="DejaVu Sans"; fontsize=12; fontcolor="#475569";
+    style="rounded,filled"; color="#cbd5e1"; bgcolor="#f8fafc"; penwidth=1.4; margin=14;
+    s_gw   [label=<<B>API Gateway</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">латентность, RPS, ошибки</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+    s_serv [label=<<B>Serving / vLLM</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">TTFT, tokens/s, KV-cache</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+    s_gr   [label=<<B>Guardrails</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">блокировки, latency проверок</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+    s_keda [label=<<B>KEDA / K8s</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">queue_depth, replicas</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+    s_bil  [label=<<B>Billing</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">token usage, cost</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+  }
+
+  subgraph cluster_obs {
+    label=<<B>Метрики · Логи · Трейсы (агрегаты, без ПДн)</B>>; fontname="DejaVu Sans"; fontsize=12; fontcolor="#0d9488";
+    style="rounded,filled"; color="#5eead4"; bgcolor="#f0fdfa"; penwidth=1.4; margin=14;
+    prom [label=<<B>Prometheus + DCGM</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Golden Signals + AI-метрики</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+    loki [label=<<B>Loki</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">логи (PII-маскированные)</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+    otel [label=<<B>OTel Collector → Tempo</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">распределённые трейсы, семплирование</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+    graf [label=<<B>Grafana</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">дашборды, SLO/error budget</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+    alert[label=<<B>Alertmanager → on-call</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">алерты по SLO/порогам</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+  }
+
+  s_gw   -> prom [style=dotted, color="#0284c7"];
+  s_serv -> prom [style=dotted, color="#16a34a"];
+  s_gr   -> prom [style=dotted, color="#dc2626"];
+  s_keda -> prom [style=dotted, color="#ca8a04"];
+  s_bil  -> prom [style=dotted, color="#7c3aed"];
+  s_gw   -> loki [style=dotted, color="#94a3b8"];
+  s_gr   -> loki [style=dotted, color="#94a3b8"];
+  s_gw   -> otel [style=dotted, color="#94a3b8"];
+  s_serv -> otel [style=dotted, color="#94a3b8"];
+  prom -> graf [penwidth=1.8, color="#16a34a", fontcolor="#15803d"];
+  loki -> graf [style=dashed, color="#0d9488"];
+  otel -> graf [style=dashed, color="#0d9488"];
+  prom -> alert [label="SLO burn / пороги", color="#ca8a04", fontcolor="#a16207", penwidth=1.6];
+
+  note [label=<<B>Границa с аудитом</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Наблюдаемость — про здоровье системы: агрегаты, короткий retention,<BR/>без ПДн. Юридически значимый след «кто/что/почему» — отдельный<BR/>контур аудита (см. §5.8–5.13), immutable и с долгим retention.</FONT>>, shape=note, fillcolor="#f1f5f9", color="#94a3b8"];
+}

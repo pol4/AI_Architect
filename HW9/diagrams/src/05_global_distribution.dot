@@ -1,0 +1,50 @@
+digraph G {
+  rankdir=TB;
+  labelloc="t";
+  label="Global Distribution: Geo-DNS + Edge computing, региональные GPU-кластеры";
+  fontsize=18; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.6, nodesep=0.42, ranksep=0.9, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#e0f2fe", color="#0284c7", fontcolor="#0f172a", penwidth=1.6, margin="0.22,0.14"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.15];
+
+  users [label=<<B>Пользователи по миру</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">RU / EU / APAC</FONT>>, fillcolor="#eef2ff", color="#4f46e5"];
+  geo   [label=<<B>Geo-DNS / Anycast</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">latency-based + health-check, резервный регион</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+
+  subgraph cluster_ru {
+    label=<<B>Регион RU (ЦОД, 152-ФЗ)</B>>; fontname="DejaVu Sans"; fontsize=12; fontcolor="#0d9488";
+    style="rounded,filled"; color="#5eead4"; bgcolor="#f0fdfa"; penwidth=1.4; margin=14;
+    edge_ru [label=<<B>Edge PoP</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">TLS, CDN, auth, L1 cache, rate-limit</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+    api_ru  [label=<<B>API / Ingress ru</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">guardrails, semantic cache L2</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+    gpu_ru  [label=<<B>GPU-кластер RU</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">B300, данные не покидают регион</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+  }
+  subgraph cluster_eu {
+    label=<<B>Регион EU</B>>; fontname="DejaVu Sans"; fontsize=12; fontcolor="#0d9488";
+    style="rounded,filled"; color="#5eead4"; bgcolor="#f0fdfa"; penwidth=1.4; margin=14;
+    edge_eu [label=<<B>Edge PoP</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">TLS, CDN, auth, L1 cache</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+    api_eu  [label=<<B>API / Ingress eu</B>>, fillcolor="#e0f2fe", color="#0284c7"];
+    gpu_eu  [label=<<B>GPU-кластер EU</B>>, fillcolor="#dcfce7", color="#16a34a"];
+  }
+
+  subgraph cluster_ctrl {
+    label=<<B>Глобальный control plane</B>>; fontname="DejaVu Sans"; fontsize=12; fontcolor="#4f46e5";
+    style="rounded,filled"; color="#c7d2fe"; bgcolor="#eef2ff"; penwidth=1.4; margin=14;
+    kc   [label=<<B>Keycloak (master realm)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">федерация IdP, JWKS в PoP</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+    reg  [label=<<B>Model Registry</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">синхронизация весов в регионы</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+    sync [label=<<B>Cache Pub/Sub</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">инвалидация L1/L2 между регионами</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+  }
+
+  users -> geo;
+  geo -> edge_ru [label="низкая latency", color="#7c3aed", fontcolor="#6d28d9", penwidth=1.8];
+  geo -> edge_eu [label="ближайший регион", color="#7c3aed", fontcolor="#6d28d9", penwidth=1.8];
+  edge_ru -> api_ru -> gpu_ru;
+  edge_eu -> api_eu -> gpu_eu;
+
+  kc   -> edge_ru [style=dashed, color="#0284c7", constraint=false];
+  kc   -> edge_eu [style=dashed, color="#0284c7", constraint=false];
+  reg  -> gpu_ru  [style=dashed, color="#ca8a04", constraint=false];
+  reg  -> gpu_eu  [style=dashed, color="#ca8a04", constraint=false];
+  sync -> api_ru  [style=dashed, color="#0d9488", constraint=false];
+  sync -> api_eu  [style=dashed, color="#0d9488", constraint=false];
+
+  note [label=<<B>Резидентность и отказоустойчивость</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Данные и ПДн обрабатываются в регионе пользователя (152-ФЗ/GDPR).<BR/>Edge отдаёт кэш и статику без похода в ЦОД. При падении региона<BR/>Geo-DNS уводит трафик в резервный; LLM-state реплицируется асинхронно.</FONT>>, shape=note, fillcolor="#f1f5f9", color="#94a3b8"];
+}

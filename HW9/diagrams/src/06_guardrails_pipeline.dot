@@ -1,0 +1,87 @@
+digraph G {
+  rankdir=TB;
+  labelloc="t";
+  label="Guardrails-конвейер: параллельные проверки, ранний старт LLM и early-abort";
+  fontsize=18; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.6, nodesep=0.42, ranksep=0.75, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#fee2e2", color="#dc2626", fontcolor="#0f172a", penwidth=1.6, margin="0.22,0.14"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.15];
+
+  /* ---------- вход / препроцессинг ---------- */
+  subgraph cluster_in {
+    label=<<B>Вход и препроцессинг (multi-modal)</B>>; fontname="DejaVu Sans"; fontsize=12; fontcolor="#0284c7";
+    style="rounded,filled"; color="#7dd3fc"; bgcolor="#f0f9ff"; penwidth=1.4; margin=14;
+    req   [label=<<B>Запрос</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">текст / изображение / аудио / документ</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+    router[label=<<B>1. Modality Router</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">определяет модальность</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+    prep  [label=<<B>2. Препроцессинг</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">OCR · ASR · frame-sampling · decode</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+    pre   [label=<<B>3. Pre-gate (мгновенно)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">auth, denylist, размер, флаг тенанта</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+  }
+
+  /* ---------- inference ---------- */
+  infer  [label=<<B>4. LLM Inference — старт ЗАРАНЕЕ</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">prefill идёт параллельно проверкам входа<BR/>cancel по сигналу BLOCK</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+  stream [label=<<B>5. Токены (stream)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">отдаются клиенту только после output-gate</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+
+  /* ---------- параллельные проверки входа ---------- */
+  subgraph cluster_cin {
+    label=<<B>Параллельные проверки ВХОДА (scatter-gather)</B>>; fontname="DejaVu Sans"; fontsize=12; fontcolor="#dc2626";
+    style="rounded,filled"; color="#fca5a5"; bgcolor="#fef2f2"; penwidth=1.4; margin=14;
+    ci_pii [label=<<B>PII / NER</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">маскинг ПДн</FONT>>];
+    ci_inj [label=<<B>Injection / Jailbreak</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">классификатор</FONT>>];
+    ci_pol [label=<<B>Policy + blacklists</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">правила, УК РФ</FONT>>];
+    ci_vis [label=<<B>Vision safety</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">NSFW, оружие, CSAM-hash</FONT>>];
+  }
+  gin [label=<<B>6. Input Gate</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">gather + early-abort<BR/>hard-veto → стоп немедленно</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+
+  /* ---------- параллельные проверки выхода ---------- */
+  subgraph cluster_cout {
+    label=<<B>Параллельные проверки ВЫХОДА (инкрементально, по мере генерации)</B>>; fontname="DejaVu Sans"; fontsize=12; fontcolor="#dc2626";
+    style="rounded,filled"; color="#fca5a5"; bgcolor="#fef2f2"; penwidth=1.4; margin=14;
+    co_leak  [label=<<B>PII-leak scan</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">плейсхолдеры + NER</FONT>>];
+    co_harm  [label=<<B>Harmfulness (fast)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">дистиллятор, ~мс</FONT>>];
+    co_pol   [label=<<B>УК РФ / policy</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">правила, blacklists</FONT>>];
+    co_vis   [label=<<B>Vision-output safety</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">если модель генерирует медиа</FONT>>];
+    co_judge [label=<<B>LLM-as-a-Judge</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">каскад: только borderline<BR/>VLM-судья для медиа</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+  }
+  gout [label=<<B>7. Output Gate</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">агрегация скора + early-abort<BR/>fail-closed</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+
+  decision [label=<<B>8. Решение</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Allow / Escalate / Block</FONT>>, shape=diamond, fillcolor="#fef9c3", color="#ca8a04"];
+  abort    [label=<<B>ABORT</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">cancel inference + стоп стрима</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+  out      [label=<<B>Ответ клиенту</B>>, fillcolor="#dcfce7", color="#16a34a"];
+  audit    [label=<<B>Аудит (WORM)</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">скор, вердикт, rationale судьи</FONT>>, shape=cylinder, style=filled, fillcolor="#e2e8f0", color="#475569"];
+  cache    [label=<<B>Кэш решений guardrails</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">хэш/эмбеддинг → вердикт</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+
+  /* ---------- связи ---------- */
+  req -> router -> prep -> pre;
+  pre -> infer  [label="PASS pre-gate → старт заранее (~0 на crit.path)", color="#16a34a", fontcolor="#15803d", penwidth=2.0];
+  pre -> ci_pii [label="fan-out", color="#dc2626", fontcolor="#b91c1c", penwidth=1.6];
+  pre -> ci_inj [color="#dc2626", penwidth=1.6];
+  pre -> ci_pol [color="#dc2626", penwidth=1.6];
+  pre -> ci_vis [color="#dc2626", penwidth=1.6];
+  ci_pii -> gin; ci_inj -> gin; ci_pol -> gin; ci_vis -> gin;
+  gin -> infer [label="PASS → продолжить", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  gin -> abort [label="BLOCK → cancel (early-abort)", color="#dc2626", fontcolor="#b91c1c", penwidth=1.8, style=dashed];
+
+  infer  -> stream;
+  stream -> co_leak  [color="#dc2626", penwidth=1.5];
+  stream -> co_harm  [color="#dc2626", penwidth=1.5];
+  stream -> co_pol   [color="#dc2626", penwidth=1.5];
+  stream -> co_vis   [color="#dc2626", penwidth=1.5];
+  co_leak -> gout; co_harm -> gout; co_pol -> gout; co_vis -> gout;
+  co_harm -> co_judge [label="borderline (gray-zone) → escalate", color="#7c3aed", fontcolor="#6d28d9", style=dashed];
+  co_judge -> gout [label="вердикт судьи", color="#7c3aed", fontcolor="#6d28d9"];
+  gout -> decision;
+  decision -> out   [label="Allow", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  decision -> abort [label="Block", color="#dc2626", fontcolor="#b91c1c", penwidth=1.8];
+  decision -> co_judge [label="Escalate", color="#7c3aed", fontcolor="#6d28d9", style=dashed];
+  gout  -> abort [label="early-abort: скор уже не пройдёт", color="#dc2626", fontcolor="#b91c1c", penwidth=1.8, style=dashed, constraint=false];
+  abort -> infer [label="cancel", color="#dc2626", fontcolor="#b91c1c", style=dashed, constraint=false];
+
+  decision -> audit [style=dotted, color="#94a3b8"];
+  abort    -> audit [style=dotted, color="#94a3b8"];
+  cache    -> gin   [label="reuse (repeat)", style=dashed, color="#0d9488", fontcolor="#0f766e", constraint=false];
+  gout     -> cache [style=dashed, color="#0d9488", constraint=false];
+  out      -> cache [style=dotted, color="#0d9488", constraint=false];
+
+  note [label=<<B>Late-binding вердикта</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Early-abort разрешён только в сторону BLOCK (безопасно).<BR/>Разрешение (Allow) выдаётся лишь после всех обязательных проверок.<BR/>Таймаут обязательной проверки = BLOCK (fail-closed).</FONT>>, shape=note, fillcolor="#f1f5f9", color="#94a3b8"];
+  note -> gout [style=dashed, color="#94a3b8", dir=none];
+}

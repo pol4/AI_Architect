@@ -1,0 +1,155 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t";
+  label="LLMaaS — High-Load архитектура: 10 000 RPS, fast path < 200 ms";
+  fontsize=18; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.6, nodesep=0.42, ranksep=1.15, splines=spline, compound=true];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#e0f2fe", color="#0284c7", fontcolor="#0f172a", penwidth=1.6, margin="0.22,0.14"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.15];
+
+  /* ---------- Клиенты ---------- */
+  subgraph cluster_clients {
+    label=<<B>Клиенты</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#4f46e5";
+    style="rounded,filled"; color="#c7d2fe"; bgcolor="#eef2ff"; penwidth=1.4; margin=16;
+    webui [label=<<B>WebUI / Чат</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">самообслуживание, выбор модели</FONT>>, fillcolor="#eef2ff", color="#4f46e5"];
+    apicl [label=<<B>API-клиенты</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">OpenAI SDK, интеграции</FONT>>, fillcolor="#eef2ff", color="#4f46e5"];
+  }
+
+  /* ---------- Global Edge ---------- */
+  subgraph cluster_edge {
+    label=<<B>Global Edge (Geo-DNS PoP)</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#7c3aed";
+    style="rounded,filled"; color="#c4b5fd"; bgcolor="#faf5ff"; penwidth=1.4; margin=16;
+    geodns [label=<<B>Geo-DNS / Global LB</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">latency-based routing</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+    cdn [label=<<B>CDN</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">WebUI, статика, TLS-термин.</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+    edgeauth [label=<<B>Edge Auth</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">JWKS/Keycloak cache, ~3 мс</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+    edgerl [label=<<B>Edge Rate-limit</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">локальный token bucket</FONT>>, fillcolor="#ede9fe", color="#7c3aed"];
+    l1cache [label=<<B>Semantic Cache L1</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">hot-queries, TTL 5 мин</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+  }
+
+  /* ---------- Ingress / API ---------- */
+  subgraph cluster_api {
+    label=<<B>Ingress &amp; API-слой (per region)</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#0284c7";
+    style="rounded,filled"; color="#7dd3fc"; bgcolor="#f0f9ff"; penwidth=1.4; margin=16;
+    waf [label=<<B>WAF / Anti-DDoS</B>>, fillcolor="#e0f2fe", color="#0284c7"];
+    gw [label=<<B>API Gateway</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Kong/Envoy, OpenAI-совместимый</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+    kc [label=<<B>Keycloak</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">OIDC/SSO, RBAC, tenants</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+    rl [label=<<B>Rate-limit / Quota</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Redis token bucket, per-key</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+    admit [label=<<B>Router + Admission Control</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">sync vs async, backpressure</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+  }
+
+  /* ---------- Cache ---------- */
+  subgraph cluster_cache {
+    label=<<B>Caching слой</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#0d9488";
+    style="rounded,filled"; color="#5eead4"; bgcolor="#f0fdfa"; penwidth=1.4; margin=16;
+    exact [label=<<B>Exact-match cache</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">hash(prompt+params), ~2 мс</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+    semcache [label=<<B>Semantic Cache L2</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Redis Vector / pgvector, ANN</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+    embed [label=<<B>Embeddings Service</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">bge-large, GPUDirect, ~5 мс</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+    prefix [label=<<B>KV / Prefix cache</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">кэш префиксов, RAG-контекст</FONT>>, fillcolor="#ccfbf1", color="#0d9488"];
+  }
+
+  /* ---------- Guardrails ---------- */
+  subgraph cluster_guard {
+    label=<<B>Guardrails (отдельный сервис)</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#dc2626";
+    style="rounded,filled"; color="#fca5a5"; bgcolor="#fef2f2"; penwidth=1.4; margin=16;
+    gin [label=<<B>Input Guardrails</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">PII-маскинг, prompt-injection</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+    gout [label=<<B>Output Guardrails</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">harmful, ПДн-утечка, УК РФ</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+    policy [label=<<B>Policy Engine</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">правила, blacklists, audit</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+  }
+
+  /* ---------- Async ---------- */
+  subgraph cluster_async {
+    label=<<B>Async-контур (heavy requests)</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#4f46e5";
+    style="rounded,filled"; color="#c7d2fe"; bgcolor="#eef2ff"; penwidth=1.4; margin=16;
+    broker [label=<<B>Брокер очередей</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Kafka / NATS JetStream</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+    prioq [label=<<B>Priority Queues</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">interactive / standard / batch</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+    workers [label=<<B>Async Workers</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">балансировщик к GPU</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+    results [label=<<B>Result Store</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">S3 + webhook/SSE/WS</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+  }
+
+  /* ---------- GPU ---------- */
+  subgraph cluster_gpu {
+    label=<<B>Inference GPU-кластер (NVIDIA B300)</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#16a34a";
+    style="rounded,filled"; color="#86efac"; bgcolor="#f0fdf4"; penwidth=1.4; margin=16;
+    serving [label=<<B>Serving Router</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Triton + vLLM, continuous batching</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+    small [label=<<B>Model pool — small</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">8B/router/guard-модели</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+    large [label=<<B>Model pool — large</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">70B+/MoE, INT4/FP8, 4×B300</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+    nodes [label=<<B>GPU-ноды 4×B300</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">1.15 ТБ VRAM, NVLink 5, CX-8</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+    keda [label=<<B>KEDA + HPA</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">scale по длине очереди</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+    nc [label=<<B>Node Autoscaler</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Karpenter/Cluster Autoscaler</FONT>>, fillcolor="#fef9c3", color="#ca8a04"];
+  }
+
+  /* ---------- Data ---------- */
+  subgraph cluster_data {
+    label=<<B>Данные и состояние</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#475569";
+    style="rounded,filled"; color="#cbd5e1"; bgcolor="#f8fafc"; penwidth=1.4; margin=16;
+    redis [label=<<B>Redis Cluster</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">кэш, rate-limit, сессии</FONT>>, shape=cylinder, style=filled, fillcolor="#e2e8f0", color="#475569"];
+    vdb [label=<<B>Vector DB</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">RAG + индекс semantic cache</FONT>>, shape=cylinder, style=filled, fillcolor="#e2e8f0", color="#475569"];
+    pg [label=<<B>PostgreSQL</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">тенанты, аудит, метаданные</FONT>>, shape=cylinder, style=filled, fillcolor="#e2e8f0", color="#475569"];
+    s3 [label=<<B>Object Storage</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">веса, датасеты, результаты</FONT>>, shape=cylinder, style=filled, fillcolor="#f1f5f9", color="#94a3b8"];
+  }
+
+  /* ---------- Observability ---------- */
+  subgraph cluster_obs {
+    label=<<B>Наблюдаемость</B>>; fontname="DejaVu Sans"; fontsize=13; fontcolor="#64748b";
+    style="rounded,filled"; color="#cbd5e1"; bgcolor="#f8fafc"; penwidth=1.4; margin=16;
+    prom [label=<<B>Prometheus / Grafana</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">SLO, TTFT, queue, cache-hit</FONT>>, fillcolor="#f1f5f9", color="#94a3b8"];
+    otel [label=<<B>OTel / Tempo / Loki</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">трейсы, логи</FONT>>, fillcolor="#f1f5f9", color="#94a3b8"];
+    dcgm [label=<<B>DCGM / GPU-метрики</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">VRAM, утилизация, KV-cache</FONT>>, fillcolor="#f1f5f9", color="#94a3b8"];
+  }
+
+  /* ---------- Fast path (< 200 ms) ---------- */
+  webui    -> geodns   [label="HTTPS", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  apicl    -> geodns   [label="OpenAI API", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  geodns   -> cdn      [label="~10 мс", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  geodns   -> edgeauth [label="~3 мс", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  cdn      -> waf      [color="#16a34a", penwidth=1.8];
+  edgeauth -> waf      [color="#16a34a", penwidth=1.8];
+  waf      -> gw       [label="~5 мс", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  gw       -> kc       [label="OIDC / introspect (cache)", dir=both, style=dashed, color="#0284c7", fontcolor="#0369a1"];
+  gw       -> rl       [label="~2 мс", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  gw       -> admit    [color="#16a34a", penwidth=1.8];
+  admit    -> l1cache  [label="lookup ~5 мс", color="#16a34a", fontcolor="#15803d", penwidth=1.8];
+  l1cache  -> admit    [label="HIT → ответ", color="#16a34a", fontcolor="#15803d", penwidth=1.8, constraint=false];
+  admit    -> exact    [label="~2 мс", color="#0d9488", fontcolor="#0f766e", penwidth=1.8];
+  exact    -> semcache [label="miss", color="#0d9488", fontcolor="#0f766e", penwidth=1.8];
+  semcache -> embed    [label="~5 мс", color="#0d9488", fontcolor="#0f766e", penwidth=1.8];
+  semcache -> vdb      [label="ANN-поиск", color="#0d9488", fontcolor="#0f766e", penwidth=1.8];
+  embed    -> redis    [label="кэш эмбеддингов", color="#0d9488", fontcolor="#0f766e"];
+  semcache -> admit    [label="HIT → ответ (~80 мс end-to-end)", color="#0d9488", fontcolor="#0f766e", penwidth=1.8, constraint=false];
+
+  /* ---------- Slow path: sync stream ---------- */
+  admit    -> gin      [label="MISS → guardrails", color="#dc2626", fontcolor="#b91c1c", penwidth=1.6];
+  gin      -> serving  [label="sanitized prompt", color="#16a34a", fontcolor="#15803d", penwidth=1.6];
+  serving  -> small    [label="short / guard-модели", color="#16a34a", fontcolor="#15803d"];
+  serving  -> large    [label="complex / длинный контекст", color="#16a34a", fontcolor="#15803d"];
+  small    -> gout     [label="токены (stream)", color="#dc2626", fontcolor="#b91c1c", penwidth=1.6];
+  large    -> gout     [label="токены (stream)", color="#dc2626", fontcolor="#b91c1c", penwidth=1.6];
+  gout     -> gw       [label="SSE / stream клиенту", color="#dc2626", fontcolor="#b91c1c", penwidth=1.6];
+  gin      -> policy   [style=dashed, color="#dc2626"];
+  gout     -> policy   [style=dashed, color="#dc2626"];
+  gout     -> semcache [label="сохранить ответ (TTL)", style=dashed, color="#0d9488", fontcolor="#0f766e"];
+
+  /* ---------- Slow path: async ---------- */
+  admit    -> broker   [label="heavy → 202 Accepted + job_id", color="#4f46e5", fontcolor="#4338ca", penwidth=1.6, constraint=false];
+  broker   -> prioq    [color="#4f46e5", fontcolor="#4338ca"];
+  prioq    -> workers  [color="#4f46e5", fontcolor="#4338ca"];
+  workers  -> serving  [label="pull (backpressure)", color="#4f46e5", fontcolor="#4338ca"];
+  workers  -> results  [label="результат", color="#4f46e5", fontcolor="#4338ca"];
+  results  -> gw       [label="webhook / WS notify", style=dashed, color="#4f46e5", fontcolor="#4338ca", constraint=false];
+
+  /* ---------- Autoscaling ---------- */
+  prioq    -> keda     [label="queue depth (metric)", style=dashed, color="#ca8a04", fontcolor="#a16207", penwidth=1.4];
+  dcgm     -> keda     [label="num_requests_waiting, KV-util", style=dashed, color="#ca8a04", fontcolor="#a16207", penwidth=1.4];
+  keda     -> serving  [label="HPA: replicas", color="#ca8a04", fontcolor="#a16207", penwidth=1.6];
+  keda     -> nc       [label="нужны GPU-ноды", color="#ca8a04", fontcolor="#a16207", penwidth=1.6];
+  nc       -> nodes    [label="+ноды / warm pool", color="#ca8a04", fontcolor="#a16207", penwidth=1.6];
+  serving  -> nodes    [style=dotted, color="#16a34a"];
+
+  /* ---------- Data / Obs ---------- */
+  nodes    -> s3       [label="загрузка весов (GPUDirect)", style=dashed, color="#94a3b8", fontcolor="#64748b"];
+  large    -> pg       [label="аудит/тенанты", style=dashed, color="#94a3b8", fontcolor="#64748b"];
+  policy   -> pg       [label="журнал решений", style=dashed, color="#94a3b8", fontcolor="#64748b"];
+  gw       -> prom     [label="metrics", style=dotted, color="#94a3b8"];
+  serving  -> dcgm     [style=dotted, color="#94a3b8"];
+  gw       -> otel     [label="traces", style=dotted, color="#94a3b8"];
+}

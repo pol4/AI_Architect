@@ -1,0 +1,35 @@
+digraph G {
+  rankdir=LR;
+  labelloc="t";
+  label="Async-processing: queue-based модель для тяжёлых запросов";
+  fontsize=18; fontcolor="#0f172a";
+  graph [fontname="DejaVu Sans", bgcolor="white", pad=0.6, nodesep=0.42, ranksep=1.1, splines=spline];
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled", fillcolor="#e0e7ff", color="#4f46e5", fontcolor="#0f172a", penwidth=1.6, margin="0.22,0.14"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#64748b", fontcolor="#475569", arrowsize=0.7, penwidth=1.15];
+
+  client [label=<<B>Клиент</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">долгий/большой запрос (RAG, agent, batch)</FONT>>, fillcolor="#eef2ff", color="#4f46e5"];
+  admit  [label=<<B>Admission Control</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">классификация: sync / async, квоты</FONT>>, fillcolor="#e0f2fe", color="#0284c7"];
+  sync   [label=<<B>Sync-путь</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">stream SSE, TTFT-бюджет</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+  ack    [label=<<B>202 Accepted + job_id</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">poll / webhook / WebSocket</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+  broker [label=<<B>Брокер</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">Kafka / NATS, партиции, retention</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+  pq     [label=<<B>Priority Queues</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">interactive &gt; standard &gt; batch, weighted-fair</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+  wpool  [label=<<B>Worker Pool</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">consumer groups, retry + DLQ</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+  gpu    [label=<<B>GPU Inference</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">vLLM: micro-batching, KV/prefix cache</FONT>>, fillcolor="#dcfce7", color="#16a34a"];
+  guard  [label=<<B>Guardrails</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">output-проверка</FONT>>, fillcolor="#fee2e2", color="#dc2626"];
+  store  [label=<<B>Result Store</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">S3 + TTL, метаданные в PG</FONT>>, shape=cylinder, style=filled, fillcolor="#e2e8f0", color="#475569"];
+  notify [label=<<B>Notify</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">webhook / SSE / WS</FONT>>, fillcolor="#e0e7ff", color="#4f46e5"];
+
+  client -> admit;
+  admit  -> sync [label="лёгкий", color="#16a34a", fontcolor="#15803d"];
+  admit  -> ack  [label="тяжёлый", color="#4f46e5", fontcolor="#4338ca", penwidth=1.8];
+  ack    -> broker [penwidth=1.8, color="#4f46e5", fontcolor="#4338ca"];
+  broker -> pq   [label="topic по приоритету", color="#4f46e5", fontcolor="#4338ca"];
+  pq     -> wpool [label="pull (backpressure)", color="#4f46e5", fontcolor="#4338ca"];
+  wpool  -> gpu   [penwidth=1.8, color="#16a34a", fontcolor="#15803d"];
+  gpu    -> guard -> store;
+  store  -> notify;
+  notify -> client [label="результат", style=dashed, color="#4f46e5", fontcolor="#4338ca", constraint=false];
+
+  bp [label=<<B>Backpressure</B><BR/><FONT POINT-SIZE="9" COLOR="#475569">queue_depth &gt; порог → 429/503 + Retry-After,<BR/>приоритет interactive не вытесняется batch</FONT>>, shape=note, fillcolor="#fef9c3", color="#ca8a04"];
+  bp -> pq [style=dashed, color="#ca8a04", dir=none];
+}
